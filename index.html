@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e14">
-<title>Confluence AI</title>
+<title>Manipulation Engine</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-:root{--bg:#0b0e14;--card:#151a23;--line:#232936;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--text:#eaecef;--muted:#848e9c}
+:root{--bg:#0b0e14;--card:#151a23;--line:#232936;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--purple:#a855f7;--text:#eaecef;--muted:#848e9c}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--text);padding-bottom:calc(66px + env(safe-area-inset-bottom));overflow-x:hidden}
 header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 12px 6px;border-bottom:1px solid var(--line)}
@@ -23,13 +23,16 @@ main{padding:12px}
 .grid{display:grid;gap:10px;grid-template-columns:1fr}
 .card{background:var(--card);border-radius:12px;padding:13px;border-left:4px solid var(--muted)}
 .card.bullish{border-left-color:var(--green)}.card.bearish{border-left-color:var(--red)}
+.card.manipulation{border-left-color:var(--amber)}
 .card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
 .symbol{font-size:16px;font-weight:700}.tf{font-size:11px;color:var(--muted);margin-left:6px;font-weight:500}
 .score{font-size:12px;padding:3px 8px;border-radius:6px;background:#1e2329;font-weight:600}
-.score.high{color:var(--green)}.score.mid{color:var(--amber)}
+.score.high{color:var(--green)}.score.mid{color:var(--amber)}.score.manip{color:var(--purple)}
 .tagrow{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
 .tag{font-size:10px;padding:2px 6px;border-radius:4px;background:#1e2329;color:#5d6675}
 .tag.on{background:#0ecb8122;color:var(--green)}
+.tag.warn{background:#f0b90b22;color:var(--amber)}
+.tag.danger{background:#a855f722;color:var(--purple)}
 .levels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center}
 .lb{background:#1e2329;padding:6px 3px;border-radius:6px}
 .ll{color:var(--muted);font-size:9px;display:block;margin-bottom:2px}
@@ -56,13 +59,16 @@ select{background:#1e2329;color:var(--text);border:1px solid var(--line);border-
 .rmetrics{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .pill{font-size:9.5px;padding:2px 5px;border-radius:4px;background:#1e2329;color:#7d8797}
 .pill.on{background:#0ecb8122;color:var(--green)}
-.pill.bear{background:#f6465d18;color:var(--red)}
+.pill.warn{background:#f0b90b22;color:var(--amber)}
+.pill.danger{background:#a855f722;color:var(--purple)}
 .setblock{margin-bottom:18px}
 .setblock label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px}
 .setblock label b{color:var(--text)}
 input[type=range]{width:100%;accent-color:#0ecb81;height:26px}
 .bigbtn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#04170f;font-weight:700;font-size:14px;margin-top:6px}
 .fineprint{font-size:10px;color:#5d6675;line-height:1.5;margin-top:14px}
+#debug{background:#1a0f0f;border:1px solid #3a1f1f;border-radius:10px;padding:12px;margin-top:14px;font-family:monospace;font-size:10px;line-height:1.6;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+#debug .ok{color:var(--green)}#debug .fail{color:var(--red)}#debug .warn{color:var(--amber)}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0f131b;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
 nav button{flex:1;padding:14px 4px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.3px}
 nav button.on{color:var(--green)}
@@ -73,7 +79,7 @@ nav button.on{color:var(--green)}
 <body>
 
 <header>
-  <div class="hrow"><h1>CONFLUENCE AI</h1><span id="status">booting…</span></div>
+  <div class="hrow"><h1>MANIPULATION ENGINE</h1><span id="status">booting…</span></div>
   <div id="progress"><i></i></div>
 </header>
 
@@ -83,6 +89,7 @@ nav button.on{color:var(--green)}
       <button data-f="all" class="on">All</button>
       <button data-f="BULLISH">Long</button>
       <button data-f="BEARISH">Short</button>
+      <button data-f="MANIPULATION">Manipulation</button>
     </div>
     <div id="feed" class="grid"><div class="empty">scanning…</div></div>
   </section>
@@ -104,19 +111,23 @@ nav button.on{color:var(--green)}
   <section id="tab-research" class="tab">
     <div class="chartbar">
       <select id="sortSel">
-        <option value="prob">sort: probability</option>
-        <option value="vol">sort: volume multiple</option>
-        <option value="turtle">sort: turtle soup</option>
+        <option value="prob">sort: AI probability</option>
+        <option value="manip">sort: manipulation score</option>
+        <option value="vpin">sort: VPIN toxicity</option>
+        <option value="ofi">sort: order flow imbalance</option>
       </select>
     </div>
     <div id="researchList"><div class="empty">scanning…</div></div>
   </section>
 
   <section id="tab-setup" class="tab">
-    <div class="setblock"><label>Min probability <b id="v-prob">70</b>%</label><input type="range" id="in-prob" min="50" max="95" step="1"></div>
+    <div class="setblock"><label>Min AI probability <b id="v-prob">65</b>%</label><input type="range" id="in-prob" min="40" max="95" step="1"></div>
+    <div class="setblock"><label>Min manipulation score <b id="v-manip">60</b></label><input type="range" id="in-manip" min="30" max="95" step="1"></div>
     <div class="setblock"><label>Universe size <b id="v-top">50</b></label><input type="range" id="in-top" min="20" max="100" step="10"></div>
     <button id="btnRefresh" class="bigbtn">Rescan now</button>
-    <p class="fineprint">Model: On-device logistic regression trained per symbol on 300 candles. Features: volume multiple, displacement/ATR, close position, turtle soup sweep, FVG presence, HTF bias, premium/discount. Probability is calibrated to that symbol's recent history, not a global rule.</p>
+    <button id="btnTest" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;font-size:13px;margin-top:8px">Run connection test</button>
+    <p class="fineprint">Engine: Stop-hunt forensics, order book wall tracking (spoofing proxy), OFI, VPIN, SMC primitives (OB/FVG/BOS), Wyckoff narrowing. AI: per-symbol logistic regression trained on 300+ candles. Data: Binance public REST.</p>
+    <div id="debug">waiting…</div>
   </section>
 </main>
 
@@ -128,23 +139,24 @@ nav button.on{color:var(--green)}
 </nav>
 
 <script>
-/* ---------------- config ---------------- */
-const DEFAULTS={topN:50,minProb:70,atrLen:14,volLookback:20,swingLookback:2,
-  scanTfs:["1h","4h"],refreshMs:300000,klinesLimit:400,
+/* ================= CONFIG ================= */
+const DEFAULTS={topN:50,minProb:65,minManip:60,atrLen:14,volLookback:20,
+  swingLookback:2,scanTfs:["1h","4h"],refreshMs:300000,klinesLimit:400,
   base:"https://data-api.binance.vision"};
 let CFG=Object.assign({},DEFAULTS);
-try{Object.assign(CFG,JSON.parse(localStorage.getItem('conf_ai')||'{}'))}catch(e){}
-function saveCfg(){try{localStorage.setItem('conf_ai',JSON.stringify({topN:CFG.topN,minProb:CFG.minProb}))}catch(e){}}
+try{Object.assign(CFG,JSON.parse(localStorage.getItem('manip_eng')||'{}'))}catch(e){}
+function saveCfg(){try{localStorage.setItem('manip_eng',JSON.stringify({topN:CFG.topN,minProb:CFG.minProb,minManip:CFG.minManip}))}catch(e){}}
 
 const S={universe:[],metrics:{},signals:[],chartSym:null,chartTf:'1h',
-  scanDone:0,scanTotal:0,scanning:false,sigFilter:'all',chart:null,candleSeries:null};
+  scanDone:0,scanTotal:0,scanning:false,sigFilter:'all',chart:null,candleSeries:null,
+  wallHistory:new Map()}; // symbol -> array of {price, qty, side, ts}
 
 const $=id=>document.getElementById(id);
 const fmt=n=>{if(!isFinite(n))return '-';const a=Math.abs(n);
   if(a>=1000)return n.toLocaleString(undefined,{maximumFractionDigits:1});
   if(a>=1)return n.toFixed(3); if(a>=0.01)return n.toFixed(4); return n.toPrecision(4);};
 
-/* ---------------- data ---------------- */
+/* ================= DATA ================= */
 const cache=new Map();
 async function getJSON(url,ttl){
   const now=Date.now(), hit=cache.get(url);
@@ -161,7 +173,6 @@ async function pool(items,worker,limit){
   await Promise.all(Array.from({length:Math.min(limit,items.length)},run));
   return out;
 }
-
 const STABLES=new Set(["USDC","FDUSD","TUSD","BUSD","DAI","EUR","GBP","AEUR","USDP","USD1","XUSD","USDE"]);
 async function loadUniverse(){
   const t=await getJSON(CFG.base+"/api/v3/ticker/24hr",60000);
@@ -176,8 +187,9 @@ async function loadUniverse(){
   return rows;
 }
 
-/* ---------------- math ---------------- */
+/* ================= MATH ================= */
 const sma=(a,i,n)=>{let s=0;for(let k=i-n+1;k<=i;k++)s+=a[k];return s/n;};
+const stddev=(a,i,n)=>{const m=sma(a,i,n);let s=0;for(let k=i-n+1;k<=i;k++)s+=Math.pow(a[k]-m,2);return Math.sqrt(s/n);};
 function atrSeries(h,l,c,n){
   const tr=[];
   for(let i=0;i<c.length;i++){
@@ -202,191 +214,304 @@ function findSwings(h,l,n){
   return {sh,sl};
 }
 
-/* ---------------- FEATURE EXTRACTION ---------------- */
-function extractFeatures(o,h,l,c,v,last,atr){
-  const n=c.length;
-  const A=atr[last];
-  if(!isFinite(A)||A<=0) return null;
+/* ================= MANIPULATION FORENSICS ================= */
+// 1. Stop-hunt / wick-hunt detector (BTQuant-inspired)
+function detectStopHunt(o,h,l,c,last,swings){
+  const {sh,sl}=swings;
+  const priorSH=sh.filter(s=>s.i<last-1);
+  const priorSL=sl.filter(s=>s.i<last-1);
+  const lSH=priorSH.length?priorSH[priorSH.length-1]:null;
+  const lSL=priorSL.length?priorSL[priorSL.length-1]:null;
+  let hunt=null;
+  // Bull trap: wick above prior swing high, close back below
+  if(lSH && h[last]>lSH.p && c[last]<lSH.p){
+    const wick=h[last]-lSH.p;
+    const body=Math.abs(c[last]-o[last]);
+    if(wick>body*0.8) hunt={type:'BEAR_STOP_HUNT',level:lSH.p,wick,body};
+  }
+  // Bear trap: wick below prior swing low, close back above
+  if(lSL && l[last]<lSL.p && c[last]>lSL.p){
+    const wick=lSL.p-l[last];
+    const body=Math.abs(c[last]-o[last]);
+    if(wick>body*0.8) hunt={type:'BULL_STOP_HUNT',level:lSL.p,wick,body};
+  }
+  return hunt;
+}
 
-  const volBase=sma(v,last-1,CFG.volLookback);
+// 2. Spoofing / wall tracking (proxy using depth snapshots over time)
+async function trackWalls(symbol,depth){
+  const now=Date.now();
+  const hist=S.wallHistory.get(symbol)||[];
+  const walls=[];
+  const bids=depth.bids||[], asks=depth.asks||[];
+  // find top 3 largest orders per side
+  const sortedBids=[...bids].sort((a,b)=>parseFloat(b[1])-parseFloat(a[1])).slice(0,3);
+  const sortedAsks=[...asks].sort((a,b)=>parseFloat(b[1])-parseFloat(a[1])).slice(0,3);
+  for(const b of sortedBids) walls.push({side:'BID',price:parseFloat(b[0]),qty:parseFloat(b[1]),ts:now});
+  for(const a of sortedAsks) walls.push({side:'ASK',price:parseFloat(a[0]),qty:parseFloat(a[1]),ts:now});
+  hist.push(...walls);
+  // keep only last 60 seconds
+  const recent=hist.filter(w=>now-w.ts<60000);
+  S.wallHistory.set(symbol,recent);
+  // detect disappeared walls near price
+  const disappeared=hist.filter(w=>now-w.ts>5000&&now-w.ts<30000&&!recent.find(r=>Math.abs(r.price-w.price)/w.price<0.001));
+  const spoofScore = disappeared.length>=2 ? Math.min(100, disappeared.length*20) : 0;
+  return {walls,spoofScore,disappeared};
+}
+
+// 3. VPIN (volume-synchronized probability of informed trading) — volume bucket approximation
+function calcVPIN(trades){
+  // Approximate: split trades into buckets by volume, compute |buy-sell|/total per bucket
+  let buy=0,sell=0;
+  const buckets=[];
+  let bucketVol=0, bucketBuy=0, bucketSell=0;
+  const targetBucket=1000; // arbitrary volume bucket size
+  for(const t of trades){
+    const q=parseFloat(t.q);
+    if(t.m===false){buy+=q;bucketBuy+=q;}else{sell+=q;bucketSell+=q;}
+    bucketVol+=q;
+    if(bucketVol>=targetBucket){
+      const total=bucketBuy+bucketSell;
+      if(total>0) buckets.push(Math.abs(bucketBuy-bucketSell)/total);
+      bucketVol=0;bucketBuy=0;bucketSell=0;
+    }
+  }
+  const vpin = buckets.length? buckets.reduce((a,b)=>a+b,0)/buckets.length : 0;
+  return {vpin, buy, sell, delta:buy-sell, total:buy+sell};
+}
+
+// 4. OFI (Order Flow Imbalance) — from best bid/ask quantity changes
+function calcOFI(prevDepth, currDepth){
+  if(!prevDepth||!currDepth) return 0;
+  const pb=parseFloat(prevDepth.bids[0]?.[1]||0), pa=parseFloat(prevDepth.asks[0]?.[1]||0);
+  const cb=parseFloat(currDepth.bids[0]?.[1]||0), ca=parseFloat(currDepth.asks[0]?.[1]||0);
+  const dQbid=cb-pb, dQask=ca-pa;
+  const denom=Math.abs(dQbid)+Math.abs(dQask);
+  return denom>0 ? (dQbid-dQask)/denom : 0;
+}
+
+// 5. SMC primitives (order block, FVG, liquidity sweep)
+function detectSMC(o,h,l,c,v,last){
+  // FVG
+  let fvgBull=false,fvgBear=false;
+  for(let i=Math.max(2,last-8);i<=last;i++){
+    if(l[i]>h[i-2])fvgBull=true;
+    if(h[i]<l[i-2])fvgBear=true;
+  }
+  // Liquidity sweep (equal highs/lows taken)
+  const {sh,sl}=findSwings(h,l,2);
+  let sweepBull=false,sweepBear=false;
+  for(let i=Math.max(0,last-5);i<=last;i++){
+    for(const s of sl) if(s.i<i-2 && l[i]<s.p && c[i]>s.p) sweepBull=true;
+    for(const s of sh) if(s.i<i-2 && h[i]>s.p && c[i]<s.p) sweepBear=true;
+  }
+  // Wyckoff narrowing
+  const ranges=[];
+  for(let i=Math.max(0,last-20);i<=last;i++) ranges.push(h[i]-l[i]);
+  const firstAvg=ranges.slice(0,10).reduce((a,b)=>a+b,0)/10;
+  const lastAvg=ranges.slice(-10).reduce((a,b)=>a+b,0)/10;
+  const narrowing=firstAvg>0&&lastAvg/firstAvg<0.65;
+  return {fvgBull,fvgBear,sweepBull,sweepBear,narrowing};
+}
+
+/* ================= AI MODEL (per-symbol logistic regression) ================= */
+function trainLogistic(X,y,lr=0.08,epochs=300){
+  const n=X.length,d=X[0].length;
+  const w=new Array(d).fill(0);
+  const sig=z=>1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
+  for(let e=0;e<epochs;e++){
+    for(let i=0;i<n;i++){
+      let z=0;for(let j=0;j<d;j++)z+=w[j]*X[i][j];
+      const p=sig(z),err=p-y[i];
+      for(let j=0;j<d;j++)w[j]-=lr*err*X[i][j];
+    }
+  }
+  return w;
+}
+function predict(w,x){
+  let z=0;for(let j=0;j<w.length;j++)z+=w[j]*x[j];
+  return 1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
+}
+function buildTraining(o,h,l,c,v,atr){
+  const X=[],y=[];
+  for(let i=60;i<c.length-6;i++){
+    const f=extractFeatures(o,h,l,c,v,i,atr);
+    if(!f)continue;
+    const future=c[i+6];
+    const label=future>c[i]+atr[i]*0.3?1:0;
+    X.push([1,f.volMult,f.bodyATR,f.closePos,f.turtleBull,f.turtleBear,
+      f.fvgBull,f.fvgBear,f.htfBull,f.htfBear,f.inDiscount,f.inPremium,
+      f.ofi,f.vpin,f.sweepBull?1:0,f.sweepBear?1:0,f.narrowing?1:0]);
+    y.push(label);
+  }
+  return {X,y};
+}
+function extractFeatures(o,h,l,c,v,last,atr,ofi=0,vpin=0){
+  const A=atr[last];if(!isFinite(A)||A<=0)return null;
+  const volBase=sma(v,last-1,20);
   const volMult=volBase>0?v[last]/volBase:0;
-
   const range=h[last]-l[last];
   const closePos=range>0?(c[last]-l[last])/range:0.5;
   const bodyATR=Math.abs(c[last]-o[last])/A;
-
-  const {sh,sl}=findSwings(h,l,CFG.swingLookback);
-  const pSH=sh.filter(s=>s.i<last-1), pSL=sl.filter(s=>s.i<last-1);
-  const lSH=pSH.length?pSH[pSH.length-1]:null;
+  const {sh,sl}=findSwings(h,l,2);
+  const pSL=sl.filter(s=>s.i<last-1),pSH=sh.filter(s=>s.i<last-1);
   const lSL=pSL.length?pSL[pSL.length-1]:null;
-
-  // Turtle Soup: wick takes out prior swing but closes back
-  const turtleBull = !!(lSL && l[last]<lSL.p && c[last]>lSL.p);
-  const turtleBear = !!(lSH && h[last]>lSH.p && c[last]<lSH.p);
-
-  // FVG
+  const lSH=pSH.length?pSH[pSH.length-1]:null;
+  const turtleBull=!!(lSL&&l[last]<lSL.p&&c[last]>lSL.p)?1:0;
+  const turtleBear=!!(lSH&&h[last]>lSH.p&&c[last]<lSH.p)?1:0;
   let fvgBull=false,fvgBear=false;
   for(let i=Math.max(2,last-5);i<=last;i++){
     if(l[i]>h[i-2])fvgBull=true;
     if(h[i]<l[i-2])fvgBear=true;
   }
-
   const ref20=c[Math.max(0,last-20)];
-  const htfBull=c[last]>ref20;
-  const htfBear=c[last]<ref20;
-
-  const hi20=Math.max(...h.slice(-20)), lo20=Math.min(...l.slice(-20));
+  const htfBull=c[last]>ref20?1:0;
+  const htfBear=c[last]<ref20?1:0;
+  const hi20=Math.max(...h.slice(-20)),lo20=Math.min(...l.slice(-20));
   const eq=(hi20+lo20)/2;
-  const inDiscount=c[last]<eq, inPremium=c[last]>eq;
-
-  return {volMult,closePos,bodyATR,turtleBull:turtleBull?1:0,turtleBear:turtleBear?1:0,
-    fvgBull:fvgBull?1:0,fvgBear:fvgBear?1:0,htfBull:htfBull?1:0,htfBear:htfBear?1:0,
-    inDiscount:inDiscount?1:0,inPremium:inPremium?1:0};
+  const inDiscount=c[last]<eq?1:0;
+  const inPremium=c[last]>eq?1:0;
+  const smc=detectSMC(o,h,l,c,v,last);
+  return {volMult,closePos,bodyATR,turtleBull,turtleBear,
+    fvgBull:fvgBull?1:0,fvgBear:fvgBear?1:0,htfBull,htfBear,
+    inDiscount,inPremium,ofi,vpin,
+    sweepBull:smc.sweepBull?1:0,sweepBear:smc.sweepBear?1:0,
+    narrowing:smc.narrowing?1:0};
 }
 
-/* ---------------- LOGISTIC REGRESSION (on-device) ---------------- */
-function trainLogistic(X,y,lr=0.1,epochs=200){
-  const n=X.length, d=X[0].length;
-  const w=new Array(d).fill(0);
-  const sigmoid=z=>1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
-  for(let e=0;e<epochs;e++){
-    for(let i=0;i<n;i++){
-      let z=0; for(let j=0;j<d;j++) z+=w[j]*X[i][j];
-      const p=sigmoid(z), err=p-y[i];
-      for(let j=0;j<d;j++) w[j]-=lr*err*X[i][j];
-    }
-  }
-  return w;
-}
-function predictProb(w,x){
-  let z=0; for(let j=0;j<w.length;j++) z+=w[j]*x[j];
-  return 1/(1+Math.exp(-Math.max(-20,Math.min(20,z))));
-}
-
-function buildTrainingSet(o,h,l,c,v,atr){
-  const X=[],y=[];
-  for(let i=60;i<c.length-5;i++){
-    const f=extractFeatures(o,h,l,c,v,i,atr);
-    if(!f) continue;
-    // label: did price rise more than 0.3 ATR over next 5 bars?
-    const future=c[i+5];
-    const label = future > c[i] + atr[i]*0.3 ? 1 : 0;
-    X.push([1, f.volMult, f.bodyATR, f.closePos, f.turtleBull, f.turtleBear,
-            f.fvgBull, f.fvgBear, f.htfBull, f.htfBear, f.inDiscount, f.inPremium]);
-    y.push(label);
-  }
-  return {X,y};
-}
-
-/* ---------------- ENGINE ---------------- */
+/* ================= MAIN ANALYZE ================= */
 async function analyze(symbol,tf,kl){
-  const n=kl.length; if(n<150) return null;
+  const n=kl.length;if(n<150)return null;
   const o=kl.map(k=>+k[1]),h=kl.map(k=>+k[2]),l=kl.map(k=>+k[3]),c=kl.map(k=>+k[4]),v=kl.map(k=>+k[5]);
   const last=n-1;
   const atr=atrSeries(h,l,c,CFG.atrLen);
 
-  const feat=extractFeatures(o,h,l,c,v,last,atr);
-  if(!feat) return null;
+  // fetch microstructure
+  let depth,trades;
+  try{
+    [depth,trades]=await Promise.all([
+      getJSON(`${CFG.base}/api/v3/depth?symbol=${symbol}&limit=100`,10000),
+      getJSON(`${CFG.base}/api/v3/aggTrades?symbol=${symbol}&limit=500`,15000)
+    ]);
+  }catch(e){
+    return {symbol,tf,price:c[last],error:e.message,prob:0,manip:0,tags:[],sig:null};
+  }
 
-  // Train per-symbol model
-  const {X,y}=buildTrainingSet(o,h,l,c,v,atr);
-  if(X.length<80) return {symbol,tf,price:c[last],prob:0,tags:[],sig:null};
-  const w=trainLogistic(X,y);
-  const x=[1, feat.volMult, feat.bodyATR, feat.closePos, feat.turtleBull, feat.turtleBear,
-           feat.fvgBull, feat.fvgBear, feat.htfBull, feat.htfBear, feat.inDiscount, feat.inPremium];
-  const prob=predictProb(w,x)*100;
+  const wallInfo=await trackWalls(symbol,depth);
+  const vpinInfo=calcVPIN(trades);
+  const prevDepth=cache.get(`${CFG.base}/api/v3/depth?symbol=${symbol}&limit=100`)?.data;
+  const ofi=calcOFI(prevDepth,depth);
+
+  const feat=extractFeatures(o,h,l,c,v,last,atr,ofi,vpinInfo.vpin);
+  if(!feat)return null;
+
+  // train AI
+  const {X,y}=buildTraining(o,h,l,c,v,atr);
+  let prob=0;
+  if(X.length>=80){
+    const w=trainLogistic(X,y);
+    const x=[1,feat.volMult,feat.bodyATR,feat.closePos,feat.turtleBull,feat.turtleBear,
+      feat.fvgBull,feat.fvgBear,feat.htfBull,feat.htfBear,feat.inDiscount,feat.inPremium,
+      feat.ofi,feat.vpin,feat.sweepBull,feat.sweepBear,feat.narrowing?1:0];
+    prob=predict(w,x)*100;
+  }
+
+  // manipulation score
+  let manip=0;
+  const hunt=detectStopHunt(o,h,l,c,last,findSwings(h,l,2));
+  if(hunt) manip+=40;
+  if(wallInfo.spoofScore>0) manip+=wallInfo.spoofScore*0.6;
+  if(vpinInfo.vpin>0.5) manip+=20;
+  if(feat.narrowing) manip+=10;
+  manip=Math.min(100,Math.round(manip));
 
   const tags=[];
-  if(feat.volMult>=2) tags.push(['VOL '+feat.volMult.toFixed(1)+'x',1]);
-  if(feat.bodyATR>=1.2) tags.push(['DISP',1]);
-  if(feat.closePos>=0.7||(1-feat.closePos)>=0.7) tags.push(['CLOSE',1]);
-  if(feat.turtleBull) tags.push(['TURTLE↑',1]);
-  if(feat.turtleBear) tags.push(['TURTLE↓',1]);
-  if(feat.fvgBull) tags.push(['FVG↑',1]);
-  if(feat.fvgBear) tags.push(['FVG↓',1]);
-  if(feat.htfBull) tags.push(['HTF↑',1]);
-  if(feat.htfBear) tags.push(['HTF↓',1]);
+  if(feat.volMult>=2)tags.push(['VOL '+feat.volMult.toFixed(1)+'x',1,'on']);
+  if(feat.bodyATR>=1.2)tags.push(['DISP',1,'on']);
+  if(feat.turtleBull)tags.push(['TURTLE↑',1,'warn']);
+  if(feat.turtleBear)tags.push(['TURTLE↓',1,'warn']);
+  if(feat.fvgBull)tags.push(['FVG↑',1,'on']);
+  if(feat.fvgBear)tags.push(['FVG↓',1,'on']);
+  if(feat.sweepBull)tags.push(['SWEEP↑',1,'warn']);
+  if(feat.sweepBear)tags.push(['SWEEP↓',1,'warn']);
+  if(hunt)tags.push([hunt.type,1,'danger']);
+  if(wallInfo.spoofScore>0)tags.push(['SPOOF',1,'danger']);
+  if(vpinInfo.vpin>0.5)tags.push(['VPIN '+vpinInfo.vpin.toFixed(2),1,'danger']);
 
-  const base={symbol,tf,price:c[last],prob:Math.round(prob),tags,sig:null};
+  const base={symbol,tf,price:c[last],prob:Math.round(prob),manip,tags,
+    ofi,vpin:vpinInfo.vpin,spoof:wallInfo.spoofScore,sig:null};
 
-  if(prob<CFG.minProb) return base;
+  if(prob<CFG.minProb||manip<CFG.minManip)return base;
 
+  // direction
   let bull=0,bear=0;
-  if(feat.turtleBull)bull+=2; if(feat.turtleBear)bear+=2;
-  if(feat.fvgBull)bull+=1; if(feat.fvgBear)bear+=1;
-  if(feat.htfBull)bull+=1; if(feat.htfBear)bear+=1;
-  if(feat.inDiscount)bull+=1; if(feat.inPremium)bear+=1;
-  if(bull===bear) return base;
+  if(feat.turtleBull)bull+=2;if(feat.turtleBear)bear+=2;
+  if(feat.fvgBull)bull+=1;if(feat.fvgBear)bear+=1;
+  if(feat.sweepBull)bull+=2;if(feat.sweepBear)bear+=2;
+  if(feat.htfBull)bull+=1;if(feat.htfBear)bear+=1;
+  if(feat.inDiscount)bull+=1;if(feat.inPremium)bear+=1;
+  if(ofi>0.2)bull+=1;if(ofi<-0.2)bear+=1;
+  if(bull===bear)return base;
   const dir=bull>bear?'BULLISH':'BEARISH';
 
   const A=atr[last];
   const entry=c[last];
   let stop;
-  if(dir==='BULLISH') stop=l[last]-A*0.5;
+  if(dir==='BULLISH')stop=l[last]-A*0.5;
   else stop=h[last]+A*0.5;
   const risk=Math.abs(entry-stop);
   const tp=dir==='BULLISH'?entry+risk*2.5:entry-risk*2.5;
 
-  base.sig={symbol,tf,dir,prob:Math.round(prob),entry,stop,tp,
+  base.sig={symbol,tf,dir,prob:Math.round(prob),manip,entry,stop,tp,
     rr:risk>0?Math.abs(tp-entry)/risk:0,tags,
-    note:tags.filter(t=>t[1]).map(t=>t[0]).join(' · ')};
+    note:tags.filter(t=>t[1]).map(t=>t[0]).join(' · ')+` · OFI ${ofi.toFixed(2)} · VPIN ${vpinInfo.vpin.toFixed(2)}`};
   return base;
 }
 
-/* ---------------- scan ---------------- */
-function setProgress(p){ $('progress').firstElementChild.style.width=(p*100).toFixed(1)+'%'; }
-
+/* ================= SCAN ================= */
+function setProgress(p){$('progress').firstElementChild.style.width=(p*100).toFixed(1)+'%';}
 async function scan(){
-  if(S.scanning) return;
-  S.scanning=true;
+  if(S.scanning)return;S.scanning=true;
   try{
-    if(!S.universe.length) await loadUniverse();
+    if(!S.universe.length)await loadUniverse();
     const jobs=[];
-    for(const u of S.universe) for(const tf of CFG.scanTfs) jobs.push({symbol:u.symbol,tf});
-    S.scanDone=0; S.scanTotal=jobs.length; setProgress(0);
-    $('status').className=''; $('status').textContent='training models… 0/'+jobs.length;
-
+    for(const u of S.universe)for(const tf of CFG.scanTfs)jobs.push({symbol:u.symbol,tf});
+    S.scanDone=0;S.scanTotal=jobs.length;setProgress(0);
+    $('status').textContent='scanning 0/'+jobs.length;
     const res=await pool(jobs,async j=>{
       const kl=await getJSON(`${CFG.base}/api/v3/klines?symbol=${j.symbol}&interval=${j.tf}&limit=${CFG.klinesLimit}`,60000);
       const r=await analyze(j.symbol,j.tf,kl);
       S.scanDone++;
-      if(S.scanDone%5===0){ setProgress(S.scanDone/S.scanTotal); $('status').textContent=`training… ${S.scanDone}/${S.scanTotal}`; }
+      if(S.scanDone%5===0){setProgress(S.scanDone/S.scanTotal);$('status').textContent=`${S.scanDone}/${S.scanTotal}`;}
       return r;
     },4);
-
     const best={},sigMap={};
     for(const r of res){
-      if(!r) continue;
-      if(!best[r.symbol]||r.prob>best[r.symbol].prob) best[r.symbol]=r;
-      if(r.sig){
-        const cur=sigMap[r.symbol];
-        if(!cur||r.sig.prob>cur.prob) sigMap[r.symbol]=r.sig;
-      }
+      if(!r||r.error)continue;
+      if(!best[r.symbol]||r.prob>best[r.symbol].prob)best[r.symbol]=r;
+      if(r.sig){const cur=sigMap[r.symbol];if(!cur||r.sig.prob>cur.prob)sigMap[r.symbol]=r.sig;}
     }
-    S.metrics=best;
-    S.signals=Object.values(sigMap).sort((a,b)=>b.prob-a.prob);
-    setProgress(1);
-    renderSignals(); renderResearch();
+    S.metrics=best;S.signals=Object.values(sigMap).sort((a,b)=>b.prob-a.prob);
+    setProgress(1);renderSignals();renderResearch();
     $('status').textContent=`${S.signals.length} signals · ${Object.keys(best).length} pairs`;
-  }catch(e){
-    $('status').className='err'; $('status').textContent='scan failed: '+e.message;
-  }finally{ S.scanning=false; }
+  }catch(e){$('status').className='err';$('status').textContent='scan failed: '+e.message;}
+  finally{S.scanning=false;}
 }
 
-/* ---------------- render ---------------- */
+/* ================= RENDER ================= */
 function renderSignals(){
   const f=S.sigFilter;
-  const list=S.signals.filter(s=>f==='all'||s.dir===f);
+  const list=S.signals.filter(s=>f==='all'||s.dir===f||(f==='MANIPULATION'&&s.manip>=CFG.minManip));
   const el=$('feed');
-  if(!list.length){ el.innerHTML='<div class="empty">No setups above probability threshold.</div>'; return; }
+  if(!list.length){el.innerHTML='<div class="empty">No qualifying setups.</div>';return;}
   el.innerHTML=list.map(s=>{
-    const cls=s.dir==='BULLISH'?'bullish':'bearish';
-    const sc=s.prob>=85?'high':'mid';
-    const tags=s.tags.map(t=>`<span class="tag ${t[1]?'on':''}">${t[0]}</span>`).join('');
+    const cls=s.dir==='BULLISH'?'bullish':s.dir==='BEARISH'?'bearish':'manipulation';
+    const sc=s.prob>=80?'high':s.manip>=CFG.minManip?'manip':'mid';
+    const tags=s.tags.map(t=>`<span class="tag ${t[1]?(t[2]||'on'):''}">${t[0]}</span>`).join('');
     return `<div class="card ${cls}" data-sym="${s.symbol}">
       <div class="card-top">
         <div><span class="symbol">${s.symbol.replace('USDT','')}</span><span class="tf">${s.tf}</span></div>
-        <span class="score ${sc}">${s.prob}% ${s.dir==='BULLISH'?'▲':'▼'}</span>
+        <span class="score ${sc}">${s.prob}% ${s.dir==='BULLISH'?'▲':s.dir==='BEARISH'?'▼':'⚡'}</span>
       </div>
       <div class="tagrow">${tags}</div>
       <div class="levels">
@@ -404,9 +529,8 @@ function renderSignals(){
 function renderResearch(){
   const sort=$('sortSel').value;
   const rows=Object.values(S.metrics);
-  if(!rows.length){ $('researchList').innerHTML='<div class="empty">No data.</div>'; return; }
-  const key={prob:r=>r.prob,vol:r=>r.tags.find(t=>t[0].startsWith('VOL'))?1:0,
-    turtle:r=>r.tags.find(t=>t[0].startsWith('TURTLE'))?1:0}[sort];
+  if(!rows.length){$('researchList').innerHTML='<div class="empty">No data.</div>';return;}
+  const key={prob:r=>r.prob,manip:r=>r.manip,vpin:r=>r.vpin,ofi:r=>Math.abs(r.ofi)}[sort];
   rows.sort((a,b)=>key(b)-key(a));
   $('researchList').innerHTML=rows.map(r=>`
     <div class="rrow" data-sym="${r.symbol}">
@@ -414,63 +538,58 @@ function renderResearch(){
       <div style="flex:1;min-width:0"><div class="rprice">${fmt(r.price)}</div></div>
       <div class="rmetrics">
         <span class="pill ${r.prob>=CFG.minProb?'on':''}">${r.prob}%</span>
-        ${r.tags.filter(t=>t[1]).map(t=>`<span class="pill">${t[0]}</span>`).join('')}
+        <span class="pill ${r.manip>=CFG.minManip?'danger':''}">M${r.manip}</span>
+        <span class="pill ${r.vpin>0.5?'danger':''}">V${r.vpin.toFixed(2)}</span>
+        <span class="pill ${Math.abs(r.ofi)>0.3?'on':''}">O${r.ofi.toFixed(2)}</span>
       </div>
     </div>`).join('');
   $('researchList').querySelectorAll('.rrow').forEach(r=>r.addEventListener('click',()=>openChart(r.dataset.sym)));
 }
 
-/* ---------------- chart ---------------- */
+/* ================= CHART ================= */
 function fillChartSelect(){
-  const sel=$('chartSym'), cur=S.chartSym;
+  const sel=$('chartSym'),cur=S.chartSym;
   sel.innerHTML=S.universe.map(u=>`<option value="${u.symbol}">${u.base}</option>`).join('');
-  if(cur&&S.universe.some(u=>u.symbol===cur)) sel.value=cur;
+  if(cur&&S.universe.some(u=>u.symbol===cur))sel.value=cur;
   else S.chartSym=S.universe.length?S.universe[0].symbol:null;
-  if(S.chartSym) sel.value=S.chartSym;
+  if(S.chartSym)sel.value=S.chartSym;
 }
 function initChart(){
-  const container=$('chartContainer');
-  if(S.chart) return;
-  S.chart=LightweightCharts.createChart(container,{
+  const c=$('chartContainer');if(S.chart)return;
+  S.chart=LightweightCharts.createChart(c,{
     layout:{background:{color:'#151a23'},textColor:'#848e9c'},
     grid:{vertLines:{color:'#1b212c'},horzLines:{color:'#1b212c'}},
     crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
     rightPriceScale:{borderColor:'#232936'},
     timeScale:{borderColor:'#232936',timeVisible:true,secondsVisible:false}
   });
-  S.candleSeries=S.chart.addCandlestickSeries({
-    upColor:'#0ecb81',downColor:'#f6465d',borderVisible:false,
-    wickUpColor:'#0ecb81',wickDownColor:'#f6465d'
-  });
-  new ResizeObserver(()=>{
-    if(S.chart) S.chart.applyOptions({width:container.clientWidth,height:container.clientHeight});
-  }).observe(container);
+  S.candleSeries=S.chart.addCandlestickSeries({upColor:'#0ecb81',downColor:'#f6465d',borderVisible:false,wickUpColor:'#0ecb81',wickDownColor:'#f6465d'});
+  new ResizeObserver(()=>{if(S.chart)S.chart.applyOptions({width:c.clientWidth,height:c.clientHeight});}).observe(c);
 }
 async function loadChart(){
-  if(!S.chartSym){ $('chartLegend').textContent='no pair'; return; }
+  if(!S.chartSym)return;
   $('chartLegend').textContent='loading…';
   try{
     initChart();
-    const kl=await getJSON(`${CFG.base}/api/v3/klines?symbol=${S.chartSym}&interval=${S.chartTf}&limit=${CFG.klinesLimit}`,30000);
+    const kl=await getJSON(`${CFG.base}/api/v3/klines?symbol=${S.chartSym}&interval=${S.chartTf}&limit=CFG.klinesLimit`,30000);
     S.candleSeries.setData(kl.map(k=>({time:Math.floor(+k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]})));
     S.chart.timeScale().fitContent();
-    const last=+kl[kl.length-1][4], prev=+kl[kl.length-2][4];
-    const ch=(last/prev-1)*100;
+    const last=+kl[kl.length-1][4],prev=+kl[kl.length-2][4],ch=(last/prev-1)*100;
     $('chartLegend').innerHTML=`<b>${S.chartSym}</b> · ${S.chartTf} · ${fmt(last)} <span class="${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
-  }catch(e){ $('chartLegend').textContent='failed: '+e.message; }
+  }catch(e){$('chartLegend').textContent='failed: '+e.message;}
 }
-function openChart(sym){ S.chartSym=sym; $('chartSym').value=sym; switchTab('chart'); setTimeout(loadChart,50); }
+function openChart(sym){S.chartSym=sym;$('chartSym').value=sym;switchTab('chart');setTimeout(loadChart,50);}
 
-/* ---------------- tabs ---------------- */
+/* ================= TABS ================= */
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.id==='tab-'+name));
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===name));
-  if(name==='chart') setTimeout(()=>{initChart();loadChart();},50);
-  if(name==='research') renderResearch();
+  if(name==='chart')setTimeout(()=>{initChart();loadChart();},50);
+  if(name==='research')renderResearch();
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 $('sigSeg').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button');if(!b)return;
   S.sigFilter=b.dataset.f;
   [...$('sigSeg').children].forEach(x=>x.classList.toggle('on',x===b));
   renderSignals();
@@ -478,7 +597,7 @@ $('sigSeg').addEventListener('click',e=>{
 $('sortSel').addEventListener('change',renderResearch);
 $('chartSym').addEventListener('change',e=>{S.chartSym=e.target.value;loadChart();});
 $('chartTfs').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button');if(!b)return;
   S.chartTf=b.dataset.tf;
   [...$('chartTfs').children].forEach(x=>x.classList.toggle('on',x===b));
   loadChart();
@@ -486,13 +605,32 @@ $('chartTfs').addEventListener('click',e=>{
 const bind=(inp,out,key)=>{const el=$(inp),outEl=$(out);el.value=CFG[key];outEl.textContent=CFG[key];
   el.addEventListener('input',()=>{CFG[key]=parseFloat(el.value);outEl.textContent=CFG[key];saveCfg();});};
 bind('in-prob','v-prob','minProb');
+bind('in-manip','v-manip','minManip');
 bind('in-top','v-top','topN');
 $('btnRefresh').addEventListener('click',()=>{S.universe=[];scan();});
 
-/* ---------------- boot ---------------- */
+/* ================= CONNECTION TEST ================= */
+async function connectionTest(){
+  $('debug').innerHTML='';
+  const sym='BTCUSDT';
+  for(const ep of [
+    {n:'klines',u:`${CFG.base}/api/v3/klines?symbol=${sym}&interval=1h&limit=5`},
+    {n:'depth',u:`${CFG.base}/api/v3/depth?symbol=${sym}&limit=10`},
+    {n:'aggTrades',u:`${CFG.base}/api/v3/aggTrades?symbol=${sym}&limit=5`}
+  ]){
+    try{const r=await fetch(ep.u);if(!r.ok)throw new Error('HTTP '+r.status);
+      const d=await r.json();const s=Array.isArray(d)?d.length:Object.keys(d).length;
+      logDebug(`${ep.n}: OK (${s})`,'ok');
+    }catch(e){logDebug(`${ep.n}: FAILED — ${e.message}`,'fail');}
+  }
+}
+function logDebug(m,c){const el=$('debug');const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+$('btnTest').addEventListener('click',connectionTest);
+
+/* ================= BOOT ================= */
 (async function boot(){
-  try{ await loadUniverse(); initChart(); await scan(); }
-  catch(e){ $('status').className='err'; $('status').textContent='boot failed: '+e.message; }
+  try{await loadUniverse();initChart();await scan();}
+  catch(e){$('status').className='err';$('status').textContent='boot failed: '+e.message;logDebug(e.message,'fail');}
   setInterval(scan,CFG.refreshMs);
 })();
 </script>
