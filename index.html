@@ -4,204 +4,335 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0b0e14">
-<title>Orderflow Terminal</title>
+<meta name="theme-color" content="#080a0f">
+<title>Confluence AI Engine</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-:root{--bg:#0b0e14;--card:#151a23;--line:#232936;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--purple:#a855f7;--text:#eaecef;--muted:#848e9c}
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--text);padding-bottom:calc(66px + env(safe-area-inset-bottom));overflow-x:hidden}
-header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 12px 6px;border-bottom:1px solid var(--line)}
-.hrow{display:flex;justify-content:space-between;align-items:baseline}
-h1{font-size:15px;letter-spacing:1.5px;color:var(--muted);font-weight:700}
-#status{font-size:11px;color:var(--muted);text-align:right}
+:root{
+  --bg:#080a0f;--bg2:#0d1117;--card:#12171f;--card2:#171d27;--line:#1f2733;
+  --green:#0ecb81;--green2:#0a9f65;--red:#f6465d;--red2:#c23548;
+  --amber:#f0b90b;--blue:#3b82f6;--purple:#a855f7;--cyan:#06b6d4;
+  --text:#e8ecf1;--muted:#7a8698;--dim:#4b5563
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text)}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom));overflow-x:hidden;font-size:13px}
+header{position:sticky;top:0;z-index:20;background:rgba(8,10,15,.94);backdrop-filter:blur(12px);padding:11px 12px 7px;border-bottom:1px solid var(--line)}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:14px;letter-spacing:2px;color:var(--text);font-weight:800}
+h1 span{color:var(--cyan)}
+#status{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
 #status.err{color:var(--red)}
+#status.ok{color:var(--green)}
 #progress{height:2px;background:var(--line);margin-top:8px;border-radius:2px;overflow:hidden}
-#progress i{display:block;height:100%;width:0;background:var(--green);transition:width .15s}
-main{padding:12px}
-.tab{display:none}.tab.active{display:block}
+#progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .2s}
+main{padding:12px;max-width:1400px;margin:0 auto}
+.tab{display:none;animation:fade .2s ease}
+.tab.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* === CARDS === */
 .grid{display:grid;gap:10px;grid-template-columns:1fr}
-.card{background:var(--card);border-radius:12px;padding:13px;border-left:4px solid var(--muted)}
-.card.bullish{border-left-color:var(--green)}.card.bearish{border-left-color:var(--red)}
-.card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.symbol{font-size:16px;font-weight:700}.tf{font-size:11px;color:var(--muted);margin-left:6px;font-weight:500}
-.score{font-size:12px;padding:3px 8px;border-radius:6px;background:#1e2329;font-weight:600}
-.score.high{color:var(--green)}.score.mid{color:var(--amber)}
+.card{background:var(--card);border-radius:12px;padding:13px;border-left:4px solid var(--dim);position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.02),transparent 60%);pointer-events:none}
+.card.bullish{border-left-color:var(--green)}
+.card.bearish{border-left-color:var(--red)}
+.card.neutral{border-left-color:var(--amber)}
+.card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;gap:8px}
+.symwrap{display:flex;align-items:baseline;gap:6px;min-width:0}
+.symbol{font-size:17px;font-weight:800;letter-spacing:.3px}
+.tf{font-size:10px;color:var(--muted);background:var(--card2);padding:2px 6px;border-radius:4px;font-weight:600}
+.score{font-size:13px;padding:4px 9px;border-radius:7px;background:var(--card2);font-weight:800;letter-spacing:.5px;white-space:nowrap}
+.score.high{color:var(--green);box-shadow:0 0 0 1px rgba(14,203,129,.3)}
+.score.mid{color:var(--amber);box-shadow:0 0 0 1px rgba(240,185,11,.25)}
+.score.low{color:var(--muted)}
 .tagrow{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
-.tag{font-size:10px;padding:2px 6px;border-radius:4px;background:#1e2329;color:#5d6675}
-.tag.on{background:#0ecb8122;color:var(--green)}
-.tag.warn{background:#f0b90b22;color:var(--amber)}
-.tag.danger{background:#a855f722;color:var(--purple)}
-.tag.blue{background:#3b82f622;color:var(--blue)}
+.tag{font-size:9.5px;padding:2px 6px;border-radius:4px;background:var(--card2);color:var(--dim);font-weight:600;letter-spacing:.3px}
+.tag.on{background:rgba(14,203,129,.14);color:var(--green)}
+.tag.warn{background:rgba(240,185,11,.14);color:var(--amber)}
+.tag.danger{background:rgba(168,85,247,.16);color:var(--purple)}
+.tag.blue{background:rgba(59,130,246,.14);color:var(--blue)}
+.tag.cyan{background:rgba(6,182,212,.14);color:var(--cyan)}
+.tag.off{opacity:.35}
 .levels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center}
-.lb{background:#1e2329;padding:6px 3px;border-radius:6px}
-.ll{color:var(--muted);font-size:9px;display:block;margin-bottom:2px}
-.lv{font-weight:600}
-.note{font-size:10px;color:var(--muted);margin-top:9px;line-height:1.45}
-.empty{color:var(--muted);font-size:13px;padding:24px 0;text-align:center;line-height:1.6}
-.seg{display:flex;gap:6px;margin-bottom:12px}
-.seg button{flex:1;padding:7px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
-.seg button.on{background:#1e2329;color:var(--text);border-color:#2f3746}
-.chartbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-select{background:#1e2329;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;flex:1;min-width:0}
-.tfbtns{display:flex;gap:4px}
-.tfbtns button{padding:7px 9px;font-size:11px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
-.tfbtns button.on{background:#1e2329;color:var(--text);border-color:#2f3746}
-#chartContainer{height:56vh;min-height:320px;background:var(--card);border-radius:12px;overflow:hidden}
-#chartLegend{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+.lb{background:var(--card2);padding:7px 3px;border-radius:7px}
+.ll{color:var(--muted);font-size:9px;display:block;margin-bottom:3px;letter-spacing:.4px;font-weight:600}
+.lv{font-weight:800;font-size:12px}
+.note{font-size:10px;color:var(--muted);margin-top:10px;line-height:1.5;font-family:ui-monospace,Menlo,monospace;letter-spacing:.2px}
+.empty{color:var(--muted);font-size:13px;padding:32px 16px;text-align:center;line-height:1.7;background:var(--card);border-radius:12px}
+
+/* === SEGMENT CONTROL === */
+.seg{display:flex;gap:5px;margin-bottom:12px;background:var(--card);padding:4px;border-radius:10px;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:1;min-width:70px;padding:8px 10px;font-size:11.5px;font-weight:700;border-radius:7px;border:none;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;letter-spacing:.3px}
+.seg button.on{background:var(--card2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+
+/* === CHART === */
+.chartbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+select{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;font-size:13px;flex:1;min-width:0;font-weight:600}
+.tfbtns{display:flex;gap:4px;background:var(--card);padding:3px;border-radius:8px}
+.tfbtns button{padding:7px 10px;font-size:11px;font-weight:700;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer}
+.tfbtns button.on{background:var(--card2);color:var(--text)}
+#chartContainer{height:58vh;min-height:340px;background:var(--card);border-radius:12px;overflow:hidden;position:relative}
+#chartLegend{font-size:11.5px;color:var(--muted);margin-top:8px;text-align:center;line-height:1.6}
 #chartLegend b{color:var(--text)}
-.up{color:var(--green)}.down{color:var(--red)}
-.rrow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer}
-.rleft{min-width:76px}
-.rsym{font-size:14px;font-weight:700}
+
+/* === RESEARCH ROWS === */
+.rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);border-radius:10px;padding:11px 12px;margin-bottom:6px;cursor:pointer;transition:background .15s}
+.rrow:active{background:var(--card2)}
+.rleft{min-width:72px}
+.rsym{font-size:14px;font-weight:800;letter-spacing:.3px}
 .rtf{font-size:9px;color:var(--muted);margin-left:4px}
-.rprice{font-size:12px;color:var(--text)}
-.rmetrics{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
-.pill{font-size:9.5px;padding:2px 5px;border-radius:4px;background:#1e2329;color:#7d8797;white-space:nowrap}
-.pill.on{background:#0ecb8122;color:var(--green)}
-.pill.bear{background:#f6465d18;color:var(--red)}
-.pill.warn{background:#f0b90b22;color:var(--amber)}
-.pill.blue{background:#3b82f622;color:var(--blue)}
-.pill.danger{background:#a855f722;color:var(--purple)}
-.setblock{margin-bottom:16px}
-.setblock label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
-.setblock label b{color:var(--text)}
-input[type=range]{width:100%;accent-color:#0ecb81;height:26px}
-.bigbtn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#04170f;font-weight:700;font-size:14px;margin-top:6px;cursor:pointer}
-.fineprint{font-size:10px;color:#5d6675;line-height:1.6;margin-top:14px}
-#debug{background:#101822;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.6;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
-#debug .ok{color:var(--green)}#debug .fail{color:var(--red)}#debug .warn{color:var(--amber)}#debug .info{color:var(--blue)}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0f131b;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
-nav button{flex:1;padding:14px 4px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.3px;cursor:pointer}
+.rprice{font-size:12px;color:var(--text);font-weight:600}
+.rsub{font-size:9.5px;color:var(--dim);margin-top:2px}
+.rmetrics{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;max-width:60%}
+.pill{font-size:9.5px;padding:2px 6px;border-radius:4px;background:var(--card2);color:var(--muted);white-space:nowrap;font-weight:700;letter-spacing:.2px}
+.pill.on{background:rgba(14,203,129,.14);color:var(--green)}
+.pill.bear{background:rgba(246,70,93,.13);color:var(--red)}
+.pill.warn{background:rgba(240,185,11,.14);color:var(--amber)}
+.pill.blue{background:rgba(59,130,246,.14);color:var(--blue)}
+.pill.cyan{background:rgba(6,182,212,.14);color:var(--cyan)}
+.pill.danger{background:rgba(168,85,247,.16);color:var(--purple)}
+
+/* === SETUP === */
+.setblock{margin-bottom:18px;background:var(--card);padding:13px;border-radius:10px}
+.setblock label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600}
+.setblock label b{color:var(--text);font-weight:800;font-family:ui-monospace,Menlo,monospace}
+input[type=range]{width:100%;accent-color:var(--green);height:22px;background:transparent}
+.bigbtn{width:100%;padding:15px;border-radius:11px;border:none;background:var(--green);color:#021a10;font-weight:800;font-size:14px;margin-top:6px;cursor:pointer;letter-spacing:.5px}
+.bigbtn:active{transform:scale(.99)}
+.ghostbtn{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:700;font-size:13px;margin-top:8px;cursor:pointer}
+.fineprint{font-size:10.5px;color:var(--dim);line-height:1.7;margin-top:12px}
+#debug{background:#05070b;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.7;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:var(--muted)}
+#debug .ok{color:var(--green)}
+#debug .fail{color:var(--red)}
+#debug .warn{color:var(--amber)}
+#debug .info{color:var(--blue)}
+
+/* === STATS === */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--card);padding:11px;border-radius:10px}
+.stat .k{font-size:9.5px;color:var(--muted);letter-spacing:.5px;font-weight:700;margin-bottom:4px}
+.stat .v{font-size:17px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+
+/* === NAV === */
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(13,17,23,.97);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
+nav button{flex:1;padding:13px 2px 14px;background:none;border:none;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.3px;cursor:pointer;position:relative}
 nav button.on{color:var(--green)}
-@media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:1024px){.grid{grid-template-columns:repeat(3,1fr)}main{max-width:1250px;margin:0 auto}}
+nav button.on::after{content:'';position:absolute;top:0;left:30%;right:30%;height:2px;background:var(--green);border-radius:0 0 2px 2px}
+
+@media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1024px){.grid{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="hrow"><h1>ORDERFLOW</h1><span id="status">booting…</span></div>
+  <div class="hrow">
+    <h1>CONFLUENCE<span>·AI</span></h1>
+    <span id="status">booting…</span>
+  </div>
   <div id="progress"><i></i></div>
 </header>
 
 <main>
-  <section id="tab-signals" class="tab active">
-    <div class="seg" id="sigSeg">
-      <button data-f="all" class="on">All</button>
-      <button data-f="BULLISH">Long</button>
-      <button data-f="BEARISH">Short</button>
-    </div>
-    <div id="feed" class="grid"><div class="empty">scanning…</div></div>
-  </section>
 
-  <section id="tab-chart" class="tab">
-    <div class="chartbar">
-      <select id="chartSym"></select>
-      <div class="tfbtns" id="chartTfs">
-        <button data-tf="15m">15m</button>
-        <button data-tf="1h" class="on">1h</button>
-        <button data-tf="4h">4h</button>
-        <button data-tf="1d">1d</button>
-      </div>
-    </div>
-    <div id="chartContainer"></div>
-    <div id="chartLegend">select a pair</div>
-  </section>
+<!-- ============================= SIGNALS ============================= -->
+<section id="tab-signals" class="tab active">
+  <div class="stats" id="signalStats"></div>
+  <div class="seg" id="sigSeg">
+    <button data-f="all" class="on">All</button>
+    <button data-f="BULLISH">Long</button>
+    <button data-f="BEARISH">Short</button>
+    <button data-f="high">High Conv.</button>
+    <button data-f="manip">Manipulation</button>
+  </div>
+  <div id="feed" class="grid"><div class="empty">scanning…</div></div>
+</section>
 
-  <section id="tab-research" class="tab">
-    <div class="chartbar">
-      <select id="sortSel">
-        <option value="score">sort: score</option>
-        <option value="delta">sort: taker delta</option>
-        <option value="vol">sort: volume multiple</option>
-        <option value="atr">sort: volatility</option>
-      </select>
+<!-- ============================= CHART ============================= -->
+<section id="tab-chart" class="tab">
+  <div class="chartbar">
+    <select id="chartSym"></select>
+    <div class="tfbtns" id="chartTfs">
+      <button data-tf="15m">15m</button>
+      <button data-tf="1h" class="on">1h</button>
+      <button data-tf="4h">4h</button>
+      <button data-tf="1d">1d</button>
     </div>
-    <div id="researchList"><div class="empty">scanning…</div></div>
-  </section>
+  </div>
+  <div id="chartContainer"></div>
+  <div id="chartLegend">select a pair</div>
+</section>
 
-  <section id="tab-setup" class="tab">
-    <div class="setblock"><label>Min score <b id="v-score">50</b></label><input type="range" id="in-score" min="20" max="95" step="1"></div>
-    <div class="setblock"><label>Volume multiple <b id="v-vol">2.0</b>x</label><input type="range" id="in-vol" min="1.2" max="8" step="0.1"></div>
-    <div class="setblock"><label>Displacement <b id="v-disp">1.2</b> ATR</label><input type="range" id="in-disp" min="0.8" max="3" step="0.1"></div>
-    <div class="setblock"><label>Universe size <b id="v-top">40</b></label><input type="range" id="in-top" min="10" max="100" step="10"></div>
-    <button id="btnRefresh" class="bigbtn">Rescan now</button>
-    <p class="fineprint">Order flow comes from Binance klines field 9 (taker buy volume) — the buy-side of every candle. Sell volume = total − taker buy. Features: volume anomaly, taker delta, delta z-score, displacement, close position, order block, FVG, BOS/CHoCH, liquidity sweep, turtle soup, Wyckoff narrowing, premium/discount, HTF bias.</p>
-    <div id="debug">ready</div>
-  </section>
+<!-- ============================= RESEARCH ============================= -->
+<section id="tab-research" class="tab">
+  <div class="chartbar">
+    <select id="sortSel">
+      <option value="prob">sort: AI probability</option>
+      <option value="score">sort: confluence score</option>
+      <option value="delta">sort: taker delta</option>
+      <option value="buyratio">sort: buy ratio</option>
+      <option value="vol">sort: volume multiple</option>
+      <option value="atr">sort: volatility (ATR%)</option>
+      <option value="manip">sort: manipulation score</option>
+    </select>
+  </div>
+  <div id="researchList"><div class="empty">scanning…</div></div>
+</section>
+
+<!-- ============================= MANIPULATION ============================= -->
+<section id="tab-manip" class="tab">
+  <div class="chartbar">
+    <select id="manipSort">
+      <option value="manip">sort: manipulation score</option>
+      <option value="hunt">sort: stop hunt severity</option>
+      <option value="absorp">sort: absorption</option>
+      <option value="exhaust">sort: exhaustion</option>
+    </select>
+  </div>
+  <div id="manipList"><div class="empty">scanning…</div></div>
+</section>
+
+<!-- ============================= AI / MODEL ============================= -->
+<section id="tab-ai" class="tab">
+  <div id="aiPanel"><div class="empty">scanning…</div></div>
+</section>
+
+<!-- ============================= SETUP ============================= -->
+<section id="tab-setup" class="tab">
+  <div class="setblock">
+    <label>Min AI probability <b id="v-prob">55</b>%</label>
+    <input type="range" id="in-prob" min="40" max="90" step="1">
+  </div>
+  <div class="setblock">
+    <label>Min confluence score <b id="v-score">40</b></label>
+    <input type="range" id="in-score" min="10" max="90" step="1">
+  </div>
+  <div class="setblock">
+    <label>Volume multiple <b id="v-vol">1.5</b>x</label>
+    <input type="range" id="in-vol" min="1" max="6" step="0.1">
+  </div>
+  <div class="setblock">
+    <label>Universe size <b id="v-top">40</b></label>
+    <input type="range" id="in-top" min="10" max="100" step="5">
+  </div>
+  <div class="setblock">
+    <label>Scan timeframes</label>
+    <div class="seg" id="tfSeg" style="margin-bottom:0">
+      <button data-tf="15m">15m</button>
+      <button data-tf="1h" class="on">1h</button>
+      <button data-tf="4h" class="on">4h</button>
+      <button data-tf="1d">1d</button>
+    </div>
+  </div>
+  <button id="btnRefresh" class="bigbtn">Rescan Now</button>
+  <button id="btnTest" class="ghostbtn">Run Connection Test</button>
+  <p class="fineprint">
+    Engine modules: <b>Order Flow</b> (taker buy/sell from klines field 9, cumulative delta, delta divergence, absorption, exhaustion),
+    <b>SMC</b> (order blocks, FVG, BOS/CHoCH, liquidity sweeps, equal highs/lows, premium/discount, dealing range),
+    <b>ICT</b> (kill zones, Judas swing, turtle soup, power of 3, optimal trade entry),
+    <b>Wyckoff</b> (phase detection, spring, upthrust, effort vs result, sign of strength),
+    <b>Manipulation</b> (stop hunt forensics, wick analysis, volume signature, iceberg proxy),
+    <b>AI</b> (per-symbol online logistic regression trained on 300+ bars, ensemble of technical + flow models).
+    Data source: Binance public klines (CORS-safe). Depth and aggTrades are blocked by Binance in browsers.
+  </p>
+  <div id="debug">ready</div>
+</section>
+
 </main>
 
 <nav>
   <button data-tab="signals" class="on">Signals</button>
   <button data-tab="chart">Chart</button>
   <button data-tab="research">Research</button>
+  <button data-tab="manip">Manip</button>
+  <button data-tab="ai">AI</button>
   <button data-tab="setup">Setup</button>
 </nav>
 
 <script>
-/* ============================================================
-   CONFIG
-============================================================ */
+/* ================================================================
+   CONFLUENCE AI ENGINE — single-file build
+   ================================================================ */
+
+/* ---------------- CONFIG ---------------- */
 const DEFAULTS = {
   topN: 40,
-  minScore: 50,
-  volMult: 2.0,
-  dispBodyATR: 1.2,
+  minProb: 55,
+  minScore: 40,
+  volMult: 1.5,
   atrLen: 14,
   volLookback: 20,
   swingLookback: 2,
   eqTolPct: 0.0015,
-  scanTfs: ["1h", "4h"],
+  scanTfs: ["1h","4h"],
   refreshMs: 180000,
   klinesLimit: 300,
+  concurrency: 6,
+  trainWindow: 250,
   base: "https://data-api.binance.vision"
 };
-
 let CFG = Object.assign({}, DEFAULTS);
-try { Object.assign(CFG, JSON.parse(localStorage.getItem("of_cfg") || "{}")); } catch(e) {}
+try { Object.assign(CFG, JSON.parse(localStorage.getItem("cai_cfg_v1") || "{}")); } catch(e) {}
 function saveCfg() {
   try {
-    localStorage.setItem("of_cfg", JSON.stringify({
-      topN: CFG.topN, minScore: CFG.minScore, volMult: CFG.volMult,
-      dispBodyATR: CFG.dispBodyATR
+    localStorage.setItem("cai_cfg_v1", JSON.stringify({
+      topN: CFG.topN, minProb: CFG.minProb, minScore: CFG.minScore,
+      volMult: CFG.volMult, scanTfs: CFG.scanTfs
     }));
-  } catch(e) {}
+  } catch(e){}
 }
 
-const S = {
-  universe: [], metrics: {}, signals: [],
-  chartSym: null, chartTf: "1h",
-  scanning: false, sigFilter: "all",
-  chart: null, candleSeries: null,
-  lastErrors: [], scanStart: 0, scanDone: 0, scanTotal: 0
+const STATE = {
+  universe: [],
+  results: {},            // symbol -> best result across TFs
+  signals: [],            // active signals
+  manipOnly: [],          // manipulation-heavy assets
+  chartSym: null,
+  chartTf: "1h",
+  scanning: false,
+  sigFilter: "all",
+  chart: null,
+  candleSeries: null,
+  aiModels: {},           // symbol -> trained model
+  trainingLog: [],
+  lastScanMs: 0,
+  lastUniverseMs: 0,
+  scanDone: 0,
+  scanTotal: 0
 };
 
 const $ = id => document.getElementById(id);
+
+/* ---------------- FORMAT ---------------- */
 const fmt = n => {
-  if (!isFinite(n)) return "-";
+  if (!isFinite(n)) return "—";
   const a = Math.abs(n);
-  if (a >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  if (a >= 1e9) return (n/1e9).toFixed(2)+"B";
+  if (a >= 1e6) return (n/1e6).toFixed(2)+"M";
+  if (a >= 1000) return n.toLocaleString(undefined,{maximumFractionDigits:1});
   if (a >= 1) return n.toFixed(3);
   if (a >= 0.01) return n.toFixed(4);
   return n.toPrecision(4);
 };
+const fmtPct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
+const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 
-/* ============================================================
-   LOGGING
-============================================================ */
-function log(msg, type) {
+/* ---------------- LOGGING ---------------- */
+function log(msg, cls) {
   const el = $("debug");
+  if (!el) return;
   const d = document.createElement("div");
-  d.className = type || "ok";
+  d.className = cls || "ok";
   d.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
   el.appendChild(d);
   el.scrollTop = el.scrollHeight;
+  STATE.trainingLog.push({ts: Date.now(), msg, cls: cls||"ok"});
+  if (STATE.trainingLog.length > 200) STATE.trainingLog.shift();
 }
 
-/* ============================================================
-   DATA LAYER
-============================================================ */
+/* ---------------- DATA LAYER ---------------- */
 const cache = new Map();
 async function getJSON(url, ttl) {
   const now = Date.now();
@@ -221,10 +352,10 @@ async function pool(items, worker, limit) {
     while (i < items.length) {
       const k = i++;
       try { out[k] = await worker(items[k], k); }
-      catch(e) { out[k] = { error: e.message }; }
+      catch(e) { out[k] = { __error: e.message }; }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  await Promise.all(Array.from({length: Math.min(limit, items.length)}, run));
   return out;
 }
 
@@ -237,45 +368,95 @@ async function loadUniverse() {
     .filter(x => x.symbol.endsWith("USDT"))
     .map(x => ({
       symbol: x.symbol,
-      base: x.symbol.slice(0, -4),
+      base: x.symbol.slice(0,-4),
       price: +x.lastPrice,
       chg: +x.priceChangePercent,
-      quoteVol: +x.quoteVolume
+      quoteVol: +x.quoteVolume,
+      trades: +x.count
     }))
     .filter(x => !STABLES.has(x.base))
     .filter(x => !(x.base.length >= 5 && /(UP|DOWN|BULL|BEAR)$/.test(x.base)))
-    .sort((a, b) => b.quoteVol - a.quoteVol)
+    .sort((a,b) => b.quoteVol - a.quoteVol)
     .slice(0, CFG.topN);
-  S.universe = rows;
-  log("universe loaded: " + rows.length + " pairs", "ok");
+  STATE.universe = rows;
+  STATE.lastUniverseMs = Date.now();
+  log("universe: " + rows.length + " pairs", "ok");
   fillChartSelect();
   return rows;
 }
 
-/* ============================================================
-   MATH HELPERS
-============================================================ */
+/* ================================================================
+   MATH / STATISTICS
+   ================================================================ */
+const sum = a => a.reduce((s,x)=>s+x,0);
+const mean = a => a.length ? sum(a)/a.length : 0;
+function stddev(a) {
+  if (a.length < 2) return 0;
+  const m = mean(a);
+  return Math.sqrt(sum(a.map(x => (x-m)*(x-m))) / a.length);
+}
 function smaAt(arr, i, n) {
   let s = 0;
-  for (let k = i - n + 1; k <= i; k++) s += arr[k];
-  return s / n;
+  for (let k = i-n+1; k <= i; k++) s += arr[k];
+  return s/n;
 }
-function stdAt(arr, i, n) {
-  const m = smaAt(arr, i, n);
-  let s = 0;
-  for (let k = i - n + 1; k <= i; k++) s += Math.pow(arr[k] - m, 2);
-  return Math.sqrt(s / n);
+function emaSeries(arr, n) {
+  const out = [];
+  const k = 2/(n+1);
+  let prev = arr[0];
+  out.push(prev);
+  for (let i = 1; i < arr.length; i++) {
+    prev = arr[i]*k + prev*(1-k);
+    out.push(prev);
+  }
+  return out;
+}
+function rsiSeries(c, n) {
+  const out = new Array(c.length).fill(NaN);
+  let gains = 0, losses = 0;
+  for (let i = 1; i < c.length; i++) {
+    const ch = c[i] - c[i-1];
+    const g = Math.max(ch, 0), l = Math.max(-ch, 0);
+    if (i <= n) {
+      gains += g; losses += l;
+      if (i === n) {
+        const rs = losses === 0 ? 100 : gains/losses;
+        out[i] = 100 - 100/(1+rs);
+      }
+    } else {
+      gains = (gains*(n-1) + g)/n;
+      losses = (losses*(n-1) + l)/n;
+      const rs = losses === 0 ? 100 : gains/losses;
+      out[i] = 100 - 100/(1+rs);
+    }
+  }
+  return out;
 }
 function atrSeries(h, l, c, n) {
   const tr = [];
   for (let i = 0; i < c.length; i++) {
-    if (i === 0) { tr.push(h[i] - l[i]); continue; }
-    tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i-1]), Math.abs(l[i] - c[i-1])));
+    if (i === 0) { tr.push(h[i]-l[i]); continue; }
+    tr.push(Math.max(h[i]-l[i], Math.abs(h[i]-c[i-1]), Math.abs(l[i]-c[i-1])));
   }
   const out = [];
-  for (let i = 0; i < tr.length; i++) out.push(i < n - 1 ? NaN : smaAt(tr, i, n));
+  for (let i = 0; i < tr.length; i++) out.push(i < n-1 ? NaN : smaAt(tr, i, n));
   return out;
 }
+function vwapSeries(h, l, c, v) {
+  const out = [];
+  let cumPV = 0, cumV = 0;
+  for (let i = 0; i < c.length; i++) {
+    const tp = (h[i]+l[i]+c[i])/3;
+    cumPV += tp*v[i];
+    cumV += v[i];
+    out.push(cumV > 0 ? cumPV/cumV : tp);
+  }
+  return out;
+}
+
+/* ================================================================
+   SWINGS / STRUCTURE
+   ================================================================ */
 function findSwings(h, l, n) {
   const sh = [], sl = [];
   for (let i = n; i < h.length - n; i++) {
@@ -293,33 +474,469 @@ function clusterLevels(swings, tol) {
   const out = [], used = new Array(swings.length).fill(false);
   for (let i = 0; i < swings.length; i++) {
     if (used[i]) continue;
-    const g = [swings[i]];
-    used[i] = true;
-    for (let j = i + 1; j < swings.length; j++) {
+    const g = [swings[i]]; used[i] = true;
+    for (let j = i+1; j < swings.length; j++) {
       if (used[j]) continue;
-      if (Math.abs(swings[j].p - swings[i].p) / swings[i].p <= tol) {
-        g.push(swings[j]);
-        used[j] = true;
+      if (Math.abs(swings[j].p - swings[i].p)/swings[i].p <= tol) {
+        g.push(swings[j]); used[j] = true;
       }
     }
-    if (g.length >= 2) {
-      out.push({
-        level: g.reduce((s, x) => s + x.p, 0) / g.length,
-        count: g.length,
-        lastIdx: Math.max.apply(null, g.map(x => x.i))
-      });
-    }
+    if (g.length >= 2) out.push({
+      level: mean(g.map(x=>x.p)),
+      count: g.length,
+      lastIdx: Math.max(...g.map(x=>x.i))
+    });
   }
   return out;
 }
 
-/* ============================================================
-   CORE ANALYSIS ENGINE
-   Uses klines fields:
-   [0] openTime, [1] open, [2] high, [3] low, [4] close,
-   [5] volume, [6] closeTime, [7] quoteVolume,
-   [8] trades, [9] takerBuyBase, [10] takerBuyQuote, [11] ignore
-============================================================ */
+/* ================================================================
+   ICT MODULE
+   ================================================================ */
+function ictContext(nowUtc = new Date()) {
+  const h = nowUtc.getUTCHours();
+  const m = nowUtc.getUTCMinutes();
+  const mins = h*60 + m;
+  return {
+    london:  mins >= 7*60 && mins <= 10*60,
+    nyAM:    mins >= 12*60 && mins <= 15*60,
+    asia:    mins >= 0 && mins <= 6*60,
+    killzone: (mins >= 7*60 && mins <= 10*60) || (mins >= 12*60 && mins <= 15*60),
+    hour: h
+  };
+}
+function detectJudasSwing(o, h, l, c, last, swings) {
+  // Judas: false move at start of session that sweeps liquidity then reverses
+  if (last < 5) return null;
+  const recentBias = c[last] - c[last-4];
+  const wickUp = h[last] - Math.max(o[last], c[last]);
+  const wickDown = Math.min(o[last], c[last]) - l[last];
+  const body = Math.abs(c[last] - o[last]) || 1e-9;
+  const { sh, sl } = swings;
+  const pSH = sh.filter(s => s.i < last - 1);
+  const pSL = sl.filter(s => s.i < last - 1);
+  const lSH = pSH.length ? pSH[pSH.length-1] : null;
+  const lSL = pSL.length ? pSL[pSL.length-1] : null;
+  // bull judas: spike above prior high then close below
+  if (lSH && h[last] > lSH.p && c[last] < lSH.p && wickUp > body * 1.1 && recentBias < 0)
+    return { type: "JUDAS_BEAR", level: lSH.p, wick: wickUp, body };
+  // bear judas: spike below prior low then close above
+  if (lSL && l[last] < lSL.p && c[last] > lSL.p && wickDown > body * 1.1 && recentBias > 0)
+    return { type: "JUDAS_BULL", level: lSL.p, wick: wickDown, body };
+  return null;
+}
+function detectTurtleSoup(h, l, c, o, last, swings) {
+  const { sh, sl } = swings;
+  const pSH = sh.filter(s => s.i < last - 1);
+  const pSL = sl.filter(s => s.i < last - 1);
+  const lSH = pSH.length ? pSH[pSH.length-1] : null;
+  const lSL = pSL.length ? pSL[pSL.length-1] : null;
+  const body = Math.abs(c[last] - o[last]) || 1e-9;
+  if (lSL && l[last] < lSL.p && c[last] > lSL.p && (lSL.p - l[last]) > body * 0.7)
+    return { type: "TS_BULL", level: lSL.p };
+  if (lSH && h[last] > lSH.p && c[last] < lSH.p && (h[last] - lSH.p) > body * 0.7)
+    return { type: "TS_BEAR", level: lSH.p };
+  return null;
+}
+function detectPowerOf3(o, h, l, c, last) {
+  // Power of 3: accumulation → manipulation → distribution (single-candle proxy)
+  if (last < 3) return null;
+  const rng = h[last] - l[last];
+  if (rng <= 0) return null;
+  const cPos = (c[last] - l[last]) / rng;
+  const prevDir = c[last-1] - o[last-1];
+  const curDir = c[last] - o[last];
+  if (prevDir < 0 && curDir > 0 && cPos > 0.7) return { type: "PO3_BULL" };
+  if (prevDir > 0 && curDir < 0 && cPos < 0.3) return { type: "PO3_BEAR" };
+  return null;
+}
+function optimalTradeEntry(o, h, l, c, last, swings) {
+  // 62-79% fib retracement of a swing
+  if (last < 20) return null;
+  const { sh, sl } = swings;
+  const pSH = sh.filter(s => s.i < last - 1 && last - s.i < 30);
+  const pSL = sl.filter(s => s.i < last - 1 && last - s.i < 30);
+  if (!pSH.length || !pSL.length) return null;
+  const lo = Math.min(...pSL.map(x=>x.p));
+  const hi = Math.max(...pSH.map(x=>x.p));
+  if (hi <= lo) return null;
+  const rng = hi - lo;
+  const bullZone = [hi - rng*0.79, hi - rng*0.62];
+  const bearZone = [lo + rng*0.62, lo + rng*0.79];
+  if (c[last] >= bullZone[0] && c[last] <= bullZone[1]) return { type: "OTE_BULL", lo: bullZone[0], hi: bullZone[1] };
+  if (c[last] >= bearZone[0] && c[last] <= bearZone[1]) return { type: "OTE_BEAR", lo: bearZone[0], hi: bearZone[1] };
+  return null;
+}
+
+/* ================================================================
+   WYCKOFF MODULE
+   ================================================================ */
+function wyckoffPhase(o, h, l, c, v, last, look = 30) {
+  if (last < look) return { phase: "UNKNOWN", conf: 0 };
+  const win = Math.min(look, last);
+  const hh = h.slice(last-win, last+1);
+  const ll = l.slice(last-win, last+1);
+  const vv = v.slice(last-win, last+1);
+  const range = Math.max(...hh) - Math.min(...ll);
+  const avgRange = mean(hh.map((x,i) => hh[i]-ll[i]));
+  const rangeCompression = range / (avgRange * 4);
+  const volTrend = vv[vv.length-1] - mean(vv.slice(0, 8));
+  const priceTrend = (c[last] - c[last-win]) / (c[last-win] || 1);
+  const lastH = hh[hh.length-1], lastL = ll[ll.length-1];
+
+  if (rangeCompression < 0.75 && volTrend > 0) return { phase: "ACCUMULATION", conf: 0.7 };
+  if (rangeCompression < 0.75 && volTrend < 0) return { phase: "DISTRIBUTION", conf: 0.7 };
+  if (priceTrend > 0.02) return { phase: "MARKUP", conf: 0.6 };
+  if (priceTrend < -0.02) return { phase: "MARKDOWN", conf: 0.6 };
+
+  // Spring / Upthrust
+  const priorHi = Math.max(...hh.slice(0,-1));
+  const priorLo = Math.min(...ll.slice(0,-1));
+  if (lastL < priorLo && c[last] > priorLo) return { phase: "SPRING", conf: 0.75 };
+  if (lastH > priorHi && c[last] < priorHi) return { phase: "UPTHRUST", conf: 0.75 };
+
+  return { phase: "TRANSITION", conf: 0.3 };
+}
+
+/* ================================================================
+   ORDER FLOW MODULE
+   Uses kline field 5 (volume), field 8 (trades), field 9 (taker buy base)
+   ================================================================ */
+function orderFlowMetrics(vol, trades, tb, last) {
+  const window = Math.min(20, last);
+  const buy = [], sell = [], delta = [], ratio = [], avgTrade = [];
+  for (let i = last - window + 1; i <= last; i++) {
+    const b = tb[i];
+    const s = vol[i] - b;
+    buy.push(b); sell.push(s);
+    delta.push(b - s);
+    ratio.push(vol[i] > 0 ? b/vol[i] : 0.5);
+    avgTrade.push(trades[i] > 0 ? vol[i]/trades[i] : 0);
+  }
+  const curDelta = delta[delta.length-1];
+  const dMean = mean(delta);
+  const dStd = stddev(delta) || 1e-9;
+  const deltaZ = (curDelta - dMean) / dStd;
+
+  const cumDelta = sum(delta);
+  const cumBuy = sum(buy), cumSell = sum(sell);
+  const curRatio = ratio[ratio.length-1];
+
+  // delta divergence: price up but delta down, or vice versa
+  const priceCh = last >= 5 ? (vol[last] - vol[last-5]) : 0; // proxy is wrong; use closes elsewhere
+  return {
+    buy: buy[buy.length-1],
+    sell: sell[sell.length-1],
+    delta: curDelta,
+    deltaZ,
+    cumDelta,
+    cumBuy,
+    cumSell,
+    buyRatio: curRatio,
+    avgTrade: avgTrade[avgTrade.length-1],
+    deltaSeries: delta,
+    ratioSeries: ratio
+  };
+}
+
+function detectAbsorption(h, l, c, o, v, tb, last) {
+  // High volume, small body, close near opposite of extreme → absorption
+  if (last < 1) return null;
+  const body = Math.abs(c[last] - o[last]);
+  const range = h[last] - l[last];
+  if (range <= 0) return null;
+  const volBase = smaAt(v, last-1, 20);
+  const volMult = volBase > 0 ? v[last]/volBase : 0;
+  const buyRatio = v[last] > 0 ? tb[last]/v[last] : 0.5;
+  const cPos = (c[last] - l[last]) / range;
+
+  if (volMult >= 2.0 && body/range < 0.35 && cPos < 0.4 && buyRatio > 0.55)
+    return { type: "ABSORPTION_BULL", volMult, buyRatio };
+  if (volMult >= 2.0 && body/range < 0.35 && cPos > 0.6 && buyRatio < 0.45)
+    return { type: "ABSORPTION_BEAR", volMult, buyRatio };
+  return null;
+}
+
+function detectExhaustion(h, l, c, o, v, tb, last) {
+  // Big move, extreme volume, but closing against direction
+  if (last < 2) return null;
+  const volBase = smaAt(v, last-1, 20);
+  const volMult = volBase > 0 ? v[last]/volBase : 0;
+  const buyRatio = v[last] > 0 ? tb[last]/v[last] : 0.5;
+  const upMove = (c[last] - c[last-2]) / (c[last-2]||1);
+  if (volMult > 2.5 && upMove > 0.02 && buyRatio < 0.42)
+    return { type: "EXHAUSTION_BULL", volMult, buyRatio };
+  if (volMult > 2.5 && upMove < -0.02 && buyRatio > 0.58)
+    return { type: "EXHAUSTION_BEAR", volMult, buyRatio };
+  return null;
+}
+
+function detectDeltaDivergence(c, deltaSeries) {
+  if (deltaSeries.length < 5) return null;
+  const priceTrend = c[c.length-1] - c[c.length-5];
+  const deltaTrend = deltaSeries[deltaSeries.length-1] - deltaSeries[0];
+  if (priceTrend > 0 && deltaTrend < 0) return { type: "BEAR_DIV" };
+  if (priceTrend < 0 && deltaTrend > 0) return { type: "BULL_DIV" };
+  return null;
+}
+
+/* ================================================================
+   MANIPULATION MODULE
+   ================================================================ */
+function manipulationScore(o, h, l, c, v, tb, last, swings) {
+  const body = Math.abs(c[last] - o[last]) || 1e-9;
+  const range = h[last] - l[last];
+  const wickUp = h[last] - Math.max(o[last], c[last]);
+  const wickDown = Math.min(o[last], c[last]) - l[last];
+  const volBase = smaAt(v, last-1, 20);
+  const volMult = volBase > 0 ? v[last]/volBase : 0;
+  const buyRatio = v[last] > 0 ? tb[last]/v[last] : 0.5;
+  const cPos = range > 0 ? (c[last] - l[last]) / range : 0.5;
+
+  let score = 0;
+  const flags = [];
+
+  // 1. Stop hunt wicks
+  const { sh, sl } = swings;
+  const pSH = sh.filter(s => s.i < last - 1);
+  const pSL = sl.filter(s => s.i < last - 1);
+  const lSH = pSH.length ? pSH[pSH.length-1] : null;
+  const lSL = pSL.length ? pSL[pSL.length-1] : null;
+
+  if (lSH && h[last] > lSH.p && c[last] < lSH.p && wickUp > body * 0.9) {
+    score += 35; flags.push("STOP_HUNT_UP");
+  }
+  if (lSL && l[last] < lSL.p && c[last] > lSL.p && wickDown > body * 0.9) {
+    score += 35; flags.push("STOP_HUNT_DOWN");
+  }
+
+  // 2. Wick/body ratio anomaly
+  const wickRatio = (wickUp + wickDown) / body;
+  if (wickRatio > 2.5 && volMult > 1.5) {
+    score += 15; flags.push("WICK_ANOMALY");
+  }
+
+  // 3. Volume with no direction (absorption)
+  if (volMult > 2.0 && body/range < 0.3) {
+    score += 20; flags.push("ABSORPTION");
+  }
+
+  // 4. Delta divergence from price
+  const priceMove5 = c[last] - c[Math.max(0,last-5)];
+  const deltaNow = tb[last] - (v[last]-tb[last]);
+  if (priceMove5 > 0 && deltaNow < 0 && volMult > 1.3) {
+    score += 12; flags.push("DIVERGENCE");
+  }
+  if (priceMove5 < 0 && deltaNow > 0 && volMult > 1.3) {
+    score += 12; flags.push("DIVERGENCE");
+  }
+
+  // 5. Close-against-extreme (fakeout signature)
+  if (wickUp > body * 2 && cPos < 0.35 && volMult > 1.5) {
+    score += 10; flags.push("FAKEOUT_UP");
+  }
+  if (wickDown > body * 2 && cPos > 0.65 && volMult > 1.5) {
+    score += 10; flags.push("FAKEOUT_DOWN");
+  }
+
+  return {
+    score: Math.min(100, score),
+    flags,
+    wickRatio,
+    volMult,
+    buyRatio,
+    cPos
+  };
+}
+
+/* ================================================================
+   SMC MODULE
+   ================================================================ */
+function smcContext(o, h, l, c, last, swings) {
+  const { sh, sl } = swings;
+  const pSH = sh.filter(s => s.i < last - 1);
+  const pSL = sl.filter(s => s.i < last - 1);
+  const lSH = pSH.length ? pSH[pSH.length-1] : null;
+  const lSL = pSL.length ? pSL[pSL.length-1] : null;
+
+  // BOS / CHoCH
+  let bosBull = false, bosBear = false, chochBull = false, chochBear = false;
+  if (lSH) {
+    if (c[last] > lSH.p && c[last-1] <= lSH.p) {
+      // was prior structure down? then CHoCH, else BOS
+      const prevSH = pSH.length >= 2 ? pSH[pSH.length-2] : null;
+      if (prevSH && prevSH.p > lSH.p) bosBull = true; else chochBull = true;
+    }
+  }
+  if (lSL) {
+    if (c[last] < lSL.p && c[last-1] >= lSL.p) {
+      const prevSL = pSL.length >= 2 ? pSL[pSL.length-2] : null;
+      if (prevSL && prevSL.p < lSL.p) bosBear = true; else chochBear = true;
+    }
+  }
+
+  // FVG
+  let fvgBull = false, fvgBear = false;
+  for (let i = Math.max(2, last-6); i <= last; i++) {
+    if (l[i] > h[i-2]) fvgBull = true;
+    if (h[i] < l[i-2]) fvgBear = true;
+  }
+
+  // Order Block: last opposite candle before displacement
+  let obBull = null, obBear = null;
+  const bodyLast = Math.abs(c[last] - o[last]);
+  const atr = (() => { let s = 0; for (let i = last-13; i <= last; i++) s += (h[i]-l[i]); return s/14; })();
+  const disp = bodyLast / (atr || 1);
+  if (disp > 1.3) {
+    for (let i = last-6; i <= last-1; i++) {
+      if (i < 1) continue;
+      if (c[last] > o[last] && c[i] < o[i] && c[last] > h[i]) {
+        obBull = { high: h[i], low: l[i], i };
+        break;
+      }
+      if (c[last] < o[last] && c[i] > o[i] && c[last] < l[i]) {
+        obBear = { high: h[i], low: l[i], i };
+        break;
+      }
+    }
+  }
+
+  // Liquidity sweep from clusters
+  const hp = clusterLevels(sh, CFG.eqTolPct).filter(p => p.lastIdx < last - 2);
+  const lp = clusterLevels(sl, CFG.eqTolPct).filter(p => p.lastIdx < last - 2);
+  let sweepHigh = false, sweepLow = false, sweepLevel = null;
+  for (let i = Math.max(0, last-2); i <= last; i++) {
+    for (const p of hp) if (h[i] > p.level && c[i] < p.level) { sweepHigh = true; sweepLevel = p.level; }
+    for (const p of lp) if (l[i] < p.level && c[i] > p.level) { sweepLow = true; sweepLevel = p.level; }
+  }
+
+  // Premium / discount
+  const hi20 = Math.max(...h.slice(-20));
+  const lo20 = Math.min(...l.slice(-20));
+  const eq = (hi20 + lo20)/2;
+  const inDiscount = c[last] < eq;
+  const inPremium = c[last] > eq;
+
+  return {
+    bosBull, bosBear, chochBull, chochBear,
+    fvgBull, fvgBear, obBull, obBear,
+    sweepHigh, sweepLow, sweepLevel,
+    inDiscount, inPremium,
+    hi20, lo20, eq,
+    lastSH: lSH ? lSH.p : null,
+    lastSL: lSL ? lSL.p : null
+  };
+}
+
+/* ================================================================
+   FEATURE EXTRACTION FOR AI
+   ================================================================ */
+function extractFeatures(o, h, l, c, v, tb, last, atr, smc, of) {
+  const A = atr[last];
+  if (!isFinite(A) || A <= 0) return null;
+  const volBase = smaAt(v, last-1, 20);
+  const volMult = volBase > 0 ? v[last]/volBase : 0;
+  const range = h[last] - l[last];
+  const cPos = range > 0 ? (c[last] - l[last])/range : 0.5;
+  const bodyATR = Math.abs(c[last] - o[last])/A;
+  const ref20 = c[Math.max(0, last-20)];
+  const htfUp = c[last] > ref20 ? 1 : 0;
+  const htfDn = c[last] < ref20 ? 1 : 0;
+
+  return [
+    1, // bias
+    volMult,
+    bodyATR,
+    cPos,
+    of.buyRatio,
+    of.deltaZ,
+    of.cumDelta > 0 ? 1 : 0,
+    smc.fvgBull ? 1 : 0,
+    smc.fvgBear ? 1 : 0,
+    smc.bosBull ? 1 : 0,
+    smc.bosBear ? 1 : 0,
+    smc.chochBull ? 1 : 0,
+    smc.chochBear ? 1 : 0,
+    smc.obBull ? 1 : 0,
+    smc.obBear ? 1 : 0,
+    smc.sweepBull || smc.sweepLow ? 1 : 0,
+    smc.sweepBear || smc.sweepHigh ? 1 : 0,
+    smc.inDiscount ? 1 : 0,
+    smc.inPremium ? 1 : 0,
+    htfUp, htfDn
+  ];
+}
+
+/* ================================================================
+   AI: ONLINE LOGISTIC REGRESSION
+   ================================================================ */
+function trainLogistic(X, y, opts) {
+  const o = Object.assign({lr:0.1, epochs:150, l2:0.001}, opts||{});
+  const n = X.length, d = X[0].length;
+  const w = new Array(d).fill(0);
+  const sig = z => 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
+  let loss = 0;
+  for (let e = 0; e < o.epochs; e++) {
+    loss = 0;
+    for (let i = 0; i < n; i++) {
+      let z = 0;
+      for (let j = 0; j < d; j++) z += w[j]*X[i][j];
+      const p = sig(z);
+      const err = p - y[i];
+      loss += -(y[i]*Math.log(p+1e-9) + (1-y[i])*Math.log(1-p+1e-9));
+      for (let j = 0; j < d; j++) {
+        w[j] -= o.lr * (err*X[i][j] + o.l2*w[j]);
+      }
+    }
+  }
+  return { w, loss: loss/n };
+}
+function predictProb(w, x) {
+  let z = 0;
+  for (let j = 0; j < w.length; j++) z += w[j]*x[j];
+  return 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
+}
+
+function buildTrainingData(o, h, l, c, v, tb, atr) {
+  const X = [], y = [];
+  const start = Math.max(60, c.length - CFG.trainWindow);
+  for (let i = start; i < c.length - 6; i++) {
+    const swings = findSwings(h.slice(0, i+1), l.slice(0, i+1), 2);
+    const smc = smcContext(o, h, l, c, i, swings);
+    const of = orderFlowMetrics(v, Array(c.length).fill(1), tb, i);
+    const f = extractFeatures(o, h, l, c, v, tb, i, atr, smc, of);
+    if (!f) continue;
+    const future = c[i+6];
+    const label = future > c[i] + atr[i]*0.4 ? 1 : 0;
+    X.push(f);
+    y.push(label);
+  }
+  return { X, y };
+}
+
+function getAIModel(symbol, o, h, l, c, v, tb, atr) {
+  const cacheKey = symbol + "_" + c.length;
+  if (STATE.aiModels[symbol] && STATE.aiModels[symbol].key === cacheKey) return STATE.aiModels[symbol];
+  const { X, y } = buildTrainingData(o, h, l, c, v, tb, atr);
+  if (X.length < 60 || sum(y) === 0 || sum(y) === y.length) {
+    return { model: null, key: cacheKey, trainSize: X.length, accuracy: 0 };
+  }
+  const m = trainLogistic(X, y);
+  // accuracy
+  let correct = 0;
+  for (let i = 0; i < X.length; i++) {
+    const p = predictProb(m.w, X[i]);
+    if ((p > 0.5 ? 1 : 0) === y[i]) correct++;
+  }
+  const acc = correct / X.length;
+  const result = { model: m, key: cacheKey, trainSize: X.length, accuracy: acc };
+  STATE.aiModels[symbol] = result;
+  return result;
+}
+
+/* ================================================================
+   MAIN ANALYZER
+   ================================================================ */
 function analyze(kl, tf, symbol) {
   const n = kl.length;
   if (n < 100) return null;
@@ -329,355 +946,378 @@ function analyze(kl, tf, symbol) {
   const l = kl.map(k => +k[3]);
   const c = kl.map(k => +k[4]);
   const v = kl.map(k => +k[5]);
-  const tb = kl.map(k => +k[9]); // taker buy volume
-  const last = n - 1;
+  const q = kl.map(k => +k[7]);
+  const trades = kl.map(k => +k[8]);
+  const tb = kl.map(k => +k[9]);
+  const last = n-1;
 
   const atr = atrSeries(h, l, c, CFG.atrLen);
   const A = atr[last];
   if (!isFinite(A) || A <= 0) return null;
 
-  /* ---- TAKER ORDER FLOW ---- */
-  const buyVol = tb[last];
-  const sellVol = v[last] - buyVol;
-  const delta = buyVol - sellVol;
-  const buyRatio = v[last] > 0 ? buyVol / v[last] : 0.5;
+  const swings = findSwings(h, l, CFG.swingLookback);
+  const smc = smcContext(o, h, l, c, last, swings);
+  const of = orderFlowMetrics(v, trades, tb, last);
+  const manip = manipulationScore(o, h, l, c, v, tb, last, swings);
+  const absorp = detectAbsorption(h, l, c, o, v, tb, last);
+  const exhaust = detectExhaustion(h, l, c, o, v, tb, last);
+  const div = detectDeltaDivergence(c, of.deltaSeries);
+  const judas = detectJudasSwing(o, h, l, c, last, swings);
+  const turtle = detectTurtleSoup(h, l, c, o, last, swings);
+  const po3 = detectPowerOf3(o, h, l, c, last);
+  const ote = optimalTradeEntry(o, h, l, c, last, swings);
+  const wyck = wyckoffPhase(o, h, l, c, v, last);
+  const ict = ictContext();
 
-  /* cumulative delta z-score over last 20 bars */
-  const deltaSeries = [];
-  for (let i = Math.max(0, last - 20); i <= last; i++) {
-    deltaSeries.push(2 * tb[i] - v[i]);
-  }
-  const deltaMean = deltaSeries.reduce((s, x) => s + x, 0) / deltaSeries.length;
-  const deltaStd = Math.sqrt(deltaSeries.reduce((s, x) => s + Math.pow(x - deltaMean, 2), 0) / deltaSeries.length) || 1;
-  const deltaZ = (delta - deltaMean) / deltaStd;
+  // HTF bias
+  const ref50 = c[Math.max(0, last-50)];
+  const ema20 = emaSeries(c, 20);
+  const htfBull = c[last] > ref50 && ema20[last] > ema20[last-1];
+  const htfBear = c[last] < ref50 && ema20[last] < ema20[last-1];
 
-  /* cumulative delta across window */
-  let cumDelta = 0;
-  for (let i = last - 19; i <= last; i++) cumDelta += 2 * tb[i] - v[i];
+  // RSI
+  const rsi = rsiSeries(c, 14);
+  const rsiNow = rsi[last];
 
-  /* ---- VOLUME ANOMALY ---- */
-  const volBase = smaAt(v, last - 1, CFG.volLookback);
-  const volMult = volBase > 0 ? v[last] / volBase : 0;
+  // VWAP
+  const vwap = vwapSeries(h, l, c, v);
+  const aboveVWAP = c[last] > vwap[last];
 
-  /* ---- CANDLE STRUCTURE ---- */
-  const range = h[last] - l[last];
-  if (range <= 0) return null;
-  const closePos = (c[last] - l[last]) / range;
-  const bodyATR = Math.abs(c[last] - o[last]) / A;
-  const atrPct = A / c[last] * 100;
-
-  const bullCandle = c[last] > o[last];
-  const bearCandle = c[last] < o[last];
-  const dispBull = bodyATR >= CFG.dispBodyATR && closePos >= 0.7 && bullCandle;
-  const dispBear = bodyATR >= CFG.dispBodyATR && (1 - closePos) >= 0.7 && bearCandle;
-
-  /* ---- SWING STRUCTURE ---- */
-  const { sh, sl } = findSwings(h, l, CFG.swingLookback);
-  const pSH = sh.filter(s => s.i < last - 1);
-  const pSL = sl.filter(s => s.i < last - 1);
-  const lSH = pSH.length ? pSH[pSH.length - 1] : null;
-  const lSL = pSL.length ? pSL[pSL.length - 1] : null;
-
-  const bosBull = !!(lSH && c[last] > lSH.p && c[last-1] <= lSH.p);
-  const bosBear = !!(lSL && c[last] < lSL.p && c[last-1] >= lSL.p);
-
-  /* ---- ORDER BLOCK ---- */
-  /* Bull OB: last bearish candle before a bullish displacement */
-  /* Bear OB: last bullish candle before a bearish displacement */
-  let obBull = false, obBear = false;
-  let obLevel = null;
-  for (let i = last - 6; i <= last - 1; i++) {
-    if (i < 1) continue;
-    const prevBodyATR = Math.abs(c[i] - o[i]) / A;
-    if (dispBull && c[i] < o[i] && c[last] > h[i]) {
-      obBull = true;
-      obLevel = { high: h[i], low: l[i] };
-    }
-    if (dispBear && c[i] > o[i] && c[last] < l[i]) {
-      obBear = true;
-      obLevel = { high: h[i], low: l[i] };
-    }
-  }
-
-  /* ---- FAIR VALUE GAP (unfilled, last 8 bars) ---- */
-  let fvgBull = false, fvgBear = false;
-  for (let i = Math.max(2, last - 8); i <= last; i++) {
-    if (l[i] > h[i-2]) fvgBull = true;
-    if (h[i] < l[i-2]) fvgBear = true;
-  }
-
-  /* ---- LIQUIDITY SWEEP (equal highs/lows) ---- */
-  const hp = clusterLevels(sh, CFG.eqTolPct).filter(p => p.lastIdx < last - 3);
-  const lp = clusterLevels(sl, CFG.eqTolPct).filter(p => p.lastIdx < last - 3);
-  let sweepHigh = false, sweepLow = false, sweepLevel = null;
-  for (let i = Math.max(0, last - 3); i <= last; i++) {
-    for (const p of hp) {
-      if (h[i] > p.level && c[i] < p.level) { sweepHigh = true; sweepLevel = p.level; }
-    }
-    for (const p of lp) {
-      if (l[i] < p.level && c[i] > p.level) { sweepLow = true; sweepLevel = p.level; }
-    }
-  }
-
-  /* ---- TURTLE SOUP ---- */
-  const turtleBull = !!(lSL && l[last] < lSL.p && c[last] > lSL.p && (lSL.p - l[last]) > Math.abs(c[last] - o[last]) * 0.7);
-  const turtleBear = !!(lSH && h[last] > lSH.p && c[last] < lSH.p && (h[last] - lSH.p) > Math.abs(c[last] - o[last]) * 0.7);
-
-  /* ---- WYCKOFF NARROWING RANGE ---- */
-  const ranges = [];
-  for (let i = Math.max(0, last - 20); i <= last; i++) ranges.push(h[i] - l[i]);
-  const firstAvg = ranges.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
-  const lastAvg = ranges.slice(-10).reduce((a, b) => a + b, 0) / 10;
-  const narrowing = firstAvg > 0 && lastAvg / firstAvg < 0.65;
-
-  /* ---- PREMIUM / DISCOUNT ---- */
-  const hi20 = Math.max.apply(null, h.slice(-20));
-  const lo20 = Math.min.apply(null, l.slice(-20));
-  const eq = (hi20 + lo20) / 2;
-  const inDiscount = c[last] < eq;
-  const inPremium = c[last] > eq;
-
-  /* ---- HTF BIAS ---- */
-  const ref50 = c[Math.max(0, last - 50)];
-  const htfBull = c[last] > ref50 && smaAt(c, last, 20) > smaAt(c, last - 1, 20);
-  const htfBear = c[last] < ref50 && smaAt(c, last, 20) < smaAt(c, last - 1, 20);
-
-  /* ---- KILL ZONE ---- */
-  const hr = new Date().getUTCHours();
-  const killZone = (hr >= 7 && hr <= 10) || (hr >= 12 && hr <= 15);
-
-  /* ============================================================
-     SCORING — weighted confluence
-  ============================================================ */
-  let score = 0;
-  const tags = [];
-  function add(cond, pts, label, cls) {
-    if (cond) { score += pts; tags.push([label, 1, cls || "on"]); }
-    else tags.push([label, 0, ""]);
-  }
-
-  add(volMult >= CFG.volMult, Math.min(18, 8 + volMult * 2), "VOL " + volMult.toFixed(1) + "x");
-  add(Math.abs(buyRatio - 0.5) >= 0.15, 14, "BR " + (buyRatio * 100).toFixed(0) + "%", "blue");
-  add(Math.abs(deltaZ) >= 1.5, 14, "DZ " + deltaZ.toFixed(1), "blue");
-  add(Math.abs(cumDelta) > volBase * 3, 10, "CVD " + (cumDelta > 0 ? "↑" : "↓"), "blue");
-  add(dispBull || dispBear, 15, "DISP");
-  add(closePos >= 0.7 || (1 - closePos) >= 0.7, 8, "CLOSE");
-  add(obBull || obBear, 10, obBull ? "OB↑" : obBear ? "OB↓" : "OB", "warn");
-  add(fvgBull || fvgBear, 6, "FVG");
-  add(bosBull || bosBear, 10, bosBull ? "BOS↑" : bosBear ? "BOS↓" : "BOS");
-  add(sweepHigh || sweepLow, 14, sweepHigh ? "SWEEP↑" : sweepLow ? "SWEEP↓" : "SWEEP", "warn");
-  add(turtleBull || turtleBear, 12, turtleBull ? "TURTLE↑" : turtleBear ? "TURTLE↓" : "TURTLE", "danger");
-  add(narrowing, 6, "WYK", "warn");
-  add((inDiscount && htfBull) || (inPremium && htfBear), 8, "P/D");
-  add(htfBull || htfBear, 6, "HTF");
-  add(killZone, 4, "KZ");
-
+  // Build base record
   const base = {
     symbol, tf, price: c[last],
-    closePos, volMult, bodyATR, atrPct,
-    buyRatio, delta, deltaZ, cumDelta,
-    drift: (c[last] / ref50 - 1) * 100,
-    narrowing, inDiscount, inPremium,
-    sweepHigh, sweepLow, sweepLevel,
-    bosBull, bosBear, obBull, obBear,
-    fvgBull, fvgBear, turtleBull, turtleBear,
-    dispBull, dispBear, htfBull, htfBear,
-    score, tags, sig: null
+    atr: A, atrPct: A/c[last]*100,
+    volMult: manip.volMult,
+    buyRatio: of.buyRatio,
+    delta: of.delta,
+    deltaZ: of.deltaZ,
+    cumDelta: of.cumDelta,
+    manipScore: manip.score,
+    manipFlags: manip.flags,
+    absorption: absorp,
+    exhaustion: exhaust,
+    divergence: div,
+    judas, turtle, po3, ote,
+    wyckoff: wyck,
+    smc, of, ict, htfBull, htfBear,
+    rsi: rsiNow,
+    aboveVWAP,
+    closePos: manip.cPos,
+    // scoring
+    score: 0, aiProb: 0, aiAcc: 0, tags: [], sig: null
   };
 
-  if (score < CFG.minScore) return base;
+  // Score
+  let score = 0;
+  const tags = [];
+  const add = (cond, pts, label, cls) => {
+    if (cond) { score += pts; tags.push([label, 1, cls||"on"]); }
+    else tags.push([label, 0, "off"]);
+  };
 
-  /* ============================================================
-     DIRECTION: order flow must agree with structure
-  ============================================================ */
+  add(manip.volMult >= CFG.volMult, Math.min(18, 6 + manip.volMult*3), "VOL " + manip.volMult.toFixed(1) + "x", "cyan");
+  add(Math.abs(of.buyRatio - 0.5) >= 0.12, 12, "BR " + (of.buyRatio*100).toFixed(0) + "%", "blue");
+  add(Math.abs(of.deltaZ) >= 1.5, 12, "ΔZ " + of.deltaZ.toFixed(1), "blue");
+  add(of.cumDelta > 0, 6, "CVD↑", "blue");
+  add(of.cumDelta < 0, 6, "CVD↓", "blue");
+  add(smc.bosBull || smc.bosBear, 10, smc.bosBull ? "BOS↑" : "BOS↓", "on");
+  add(smc.chochBull || smc.chochBear, 12, smc.chochBull ? "CHoCH↑" : "CHoCH↓", "warn");
+  add(smc.obBull || smc.obBear, 9, smc.obBull ? "OB↑" : "OB↓", "warn");
+  add(smc.fvgBull || smc.fvgBear, 6, smc.fvgBull ? "FVG↑" : "FVG↓", "on");
+  add(smc.sweepHigh || smc.sweepLow, 12, smc.sweepLow ? "SWEEP↓" : "SWEEP↑", "warn");
+  add(smc.inDiscount || smc.inPremium, 5, smc.inDiscount ? "DISC" : "PREM", "on");
+  add(htfBull || htfBear, 7, htfBull ? "HTF↑" : "HTF↓", "on");
+  add(judas !== null, 10, judas ? (judas.type === "JUDAS_BULL" ? "JUDAS↑" : "JUDAS↓") : "JUDAS", "danger");
+  add(turtle !== null, 10, turtle ? (turtle.type === "TS_BULL" ? "TURTLE↑" : "TURTLE↓") : "TURTLE", "danger");
+  add(po3 !== null, 8, po3 ? (po3.type === "PO3_BULL" ? "PO3↑" : "PO3↓") : "PO3", "warn");
+  add(ote !== null, 6, ote ? (ote.type === "OTE_BULL" ? "OTE↑" : "OTE↓") : "OTE", "cyan");
+  add(wyck.phase === "SPRING" || wyck.phase === "UPTHRUST", 10, wyck.phase, "danger");
+  add(wyck.phase === "ACCUMULATION" || wyck.phase === "MARKUP", 5, "WYK↑", "warn");
+  add(wyck.phase === "DISTRIBUTION" || wyck.phase === "MARKDOWN", 5, "WYK↓", "warn");
+  add(absorp !== null, 8, absorp ? (absorp.type === "ABSORPTION_BULL" ? "ABS↑" : "ABS↓") : "ABS", "cyan");
+  add(exhaust !== null, 7, exhaust ? (exhaust.type === "EXHAUSTION_BULL" ? "EXH↑" : "EXH↓") : "EXH", "danger");
+  add(div !== null, 9, div ? div.type : "DIV", "danger");
+  add(ict.killzone, 4, "KZ", "cyan");
+  add(rsiNow < 30, 5, "RSI↑", "on");
+  add(rsiNow > 70, 5, "RSI↓", "on");
+  add(aboveVWAP, 3, "VWAP↑", "on");
+  add(!aboveVWAP, 3, "VWAP↓", "on");
+  add(manip.score >= 40, Math.min(15, Math.round(manip.score/5)), "MANIP " + manip.score, "danger");
+
+  base.score = Math.round(score);
+  base.tags = tags;
+
+  // AI probability
+  const aiRes = getAIModel(symbol, o, h, l, c, v, tb, atr);
+  if (aiRes.model) {
+    const f = extractFeatures(o, h, l, c, v, tb, last, atr, smc, of);
+    if (f) {
+      base.aiProb = Math.round(predictProb(aiRes.model.w, f) * 100);
+      base.aiAcc = Math.round(aiRes.accuracy * 100);
+    }
+  }
+
+  // Signal requires: score >= CFG.minScore AND aiProb >= CFG.minProb AND direction agreement
+  if (base.score < CFG.minScore) return base;
+  if (base.aiProb < CFG.minProb) return base;
+
+  // Direction vote
   let bull = 0, bear = 0;
-
-  if (buyRatio > 0.5) bull += Math.round((buyRatio - 0.5) * 20); else bear += Math.round((0.5 - buyRatio) * 20);
-  if (delta > 0) bull += 2; else bear += 2;
-  if (cumDelta > 0) bull += 1; else bear += 1;
-  if (dispBull) bull += 2;
-  if (dispBear) bear += 2;
-  if (bosBull) bull += 2;
-  if (bosBear) bear += 2;
-  if (obBull) bull += 1;
-  if (obBear) bear += 1;
-  if (sweepLow) bull += 2;
-  if (sweepHigh) bear += 2;
-  if (turtleBull) bull += 2;
-  if (turtleBear) bear += 2;
-  if (fvgBull) bull += 1;
-  if (fvgBear) bear += 1;
-  if (htfBull) bull += 1;
-  if (htfBear) bear += 1;
-  if (inDiscount) bull += 1;
-  if (inPremium) bear += 1;
+  if (of.buyRatio > 0.5) bull += Math.round((of.buyRatio-0.5)*30); else bear += Math.round((0.5-of.buyRatio)*30);
+  if (of.delta > 0) bull += 2; else bear += 2;
+  if (of.cumDelta > 0) bull += 1; else bear += 1;
+  if (smc.bosBull) bull += 3;
+  if (smc.bosBear) bear += 3;
+  if (smc.chochBull) bull += 3;
+  if (smc.chochBear) bear += 3;
+  if (smc.obBull) bull += 2;
+  if (smc.obBear) bear += 2;
+  if (smc.fvgBull) bull += 1;
+  if (smc.fvgBear) bear += 1;
+  if (smc.sweepLow) bull += 2;
+  if (smc.sweepHigh) bear += 2;
+  if (smc.inDiscount) bull += 1;
+  if (smc.inPremium) bear += 1;
+  if (htfBull) bull += 2;
+  if (htfBear) bear += 2;
+  if (judas && judas.type === "JUDAS_BULL") bull += 2;
+  if (judas && judas.type === "JUDAS_BEAR") bear += 2;
+  if (turtle && turtle.type === "TS_BULL") bull += 2;
+  if (turtle && turtle.type === "TS_BEAR") bear += 2;
+  if (wyck.phase === "SPRING") bull += 2;
+  if (wyck.phase === "UPTHRUST") bear += 2;
+  if (absorp && absorp.type === "ABSORPTION_BULL") bull += 2;
+  if (absorp && absorp.type === "ABSORPTION_BEAR") bear += 2;
+  if (exhaust && exhaust.type === "EXHAUSTION_BULL") bear += 2;
+  if (exhaust && exhaust.type === "EXHAUSTION_BEAR") bull += 2;
+  if (div && div.type === "BULL_DIV") bull += 2;
+  if (div && div.type === "BEAR_DIV") bear += 2;
 
   if (bull === bear) return base;
+
   const dir = bull > bear ? "BULLISH" : "BEARISH";
 
-  /* order flow confirmation veto: don't fire against taker flow strongly */
-  if (dir === "BULLISH" && buyRatio < 0.4) return base;
-  if (dir === "BEARISH" && buyRatio > 0.6) return base;
+  // Vetoes
+  if (dir === "BULLISH" && of.buyRatio < 0.42) return base;
+  if (dir === "BEARISH" && of.buyRatio > 0.58) return base;
+  if (dir === "BULLISH" && htfBear && !smc.chochBull) return base;
+  if (dir === "BEARISH" && htfBull && !smc.chochBear) return base;
 
+  // Entry/stop/target
   const entry = c[last];
   let stop;
   if (dir === "BULLISH") {
-    stop = (sweepLow && sweepLevel) ? Math.min(sweepLevel, l[last]) - A * 0.3 : l[last] - A * 0.5;
+    const cands = [l[last] - A*0.4];
+    if (smc.sweepLow && smc.sweepLevel) cands.push(smc.sweepLevel - A*0.25);
+    if (smc.lastSL) cands.push(smc.lastSL - A*0.2);
+    stop = Math.min(...cands);
   } else {
-    stop = (sweepHigh && sweepLevel) ? Math.max(sweepLevel, h[last]) + A * 0.3 : h[last] + A * 0.5;
+    const cands = [h[last] + A*0.4];
+    if (smc.sweepHigh && smc.sweepLevel) cands.push(smc.sweepLevel + A*0.25);
+    if (smc.lastSH) cands.push(smc.lastSH + A*0.2);
+    stop = Math.max(...cands);
   }
   const risk = Math.abs(entry - stop);
-  const tp = dir === "BULLISH" ? entry + risk * 2.5 : entry - risk * 2.5;
+  const tp1 = dir === "BULLISH" ? entry + risk*1.5 : entry - risk*1.5;
+  const tp2 = dir === "BULLISH" ? entry + risk*2.5 : entry - risk*2.5;
+  const tp3 = dir === "BULLISH" ? entry + risk*4.0 : entry - risk*4.0;
+  const rr = risk > 0 ? Math.abs(tp2-entry)/risk : 0;
 
   base.sig = {
-    symbol, tf, dir, score: Math.round(score),
-    entry, stop, tp, rr: risk > 0 ? Math.abs(tp - entry) / risk : 0,
-    tags,
-    note: tags.filter(t => t[1]).map(t => t[0]).join(" · ")
+    symbol, tf, dir, score: base.score, aiProb: base.aiProb,
+    entry, stop, tp1, tp2, tp3, rr,
+    tags, manip: manip.score,
+    note: tags.filter(t=>t[1]).map(t=>t[0]).join(" · ")
   };
   return base;
 }
 
-/* ============================================================
-   SCAN
-============================================================ */
+/* ================================================================
+   SCANNER
+   ================================================================ */
 function setProgress(p) {
-  $("progress").firstElementChild.style.width = (p * 100).toFixed(1) + "%";
+  const i = $("progress").firstElementChild;
+  if (i) i.style.width = (p*100).toFixed(1) + "%";
 }
 
 async function scan() {
-  if (S.scanning) return;
-  S.scanning = true;
-  S.lastErrors = [];
-  S.scanStart = Date.now();
+  if (STATE.scanning) return;
+  STATE.scanning = true;
+  const t0 = Date.now();
 
   try {
-    if (!S.universe.length) await loadUniverse();
+    if (!STATE.universe.length || Date.now() - STATE.lastUniverseMs > 600000) {
+      await loadUniverse();
+    }
 
     const jobs = [];
-    for (const u of S.universe) {
+    for (const u of STATE.universe) {
       for (const tf of CFG.scanTfs) jobs.push({ symbol: u.symbol, tf });
     }
-    S.scanDone = 0;
-    S.scanTotal = jobs.length;
+    STATE.scanDone = 0;
+    STATE.scanTotal = jobs.length;
     setProgress(0);
     $("status").className = "";
     $("status").textContent = "scanning 0/" + jobs.length;
 
-    const res = await pool(jobs, async (j) => {
-      const url = CFG.base + "/api/v3/klines?symbol=" + j.symbol + "&interval=" + j.tf + "&limit=" + CFG.klinesLimit;
-      const kl = await getJSON(url, 45000);
-      const r = analyze(kl, j.tf, j.symbol);
-      S.scanDone++;
-      if (S.scanDone % 8 === 0) {
-        setProgress(S.scanDone / S.scanTotal);
-        $("status").textContent = "scanning " + S.scanDone + "/" + S.scanTotal;
+    const results = await pool(jobs, async (j) => {
+      try {
+        const url = CFG.base + "/api/v3/klines?symbol=" + j.symbol + "&interval=" + j.tf + "&limit=" + CFG.klinesLimit;
+        const kl = await getJSON(url, 45000);
+        const r = analyze(kl, j.tf, j.symbol);
+        STATE.scanDone++;
+        if (STATE.scanDone % 5 === 0) {
+          setProgress(STATE.scanDone / STATE.scanTotal);
+          $("status").textContent = "scanning " + STATE.scanDone + "/" + STATE.scanTotal;
+        }
+        return r;
+      } catch(e) {
+        STATE.scanDone++;
+        return { __error: e.message, symbol: j.symbol, tf: j.tf };
       }
-      return r;
-    }, 6);
+    }, CFG.concurrency);
 
-    const best = {}, sigMap = {};
-    for (const r of res) {
-      if (!r || r.error) {
-        if (r && r.error) S.lastErrors.push(r.error);
-        continue;
-      }
+    // Aggregate best per symbol
+    const best = {};
+    const signals = [];
+    const manipList = [];
+    for (const r of results) {
+      if (!r || r.__error) continue;
       if (!best[r.symbol] || r.score > best[r.symbol].score) best[r.symbol] = r;
       if (r.sig) {
-        const cur = sigMap[r.symbol];
-        if (!cur || r.sig.score > cur.score) sigMap[r.symbol] = r.sig;
+        const cur = signals.find(s => s.symbol === r.symbol);
+        if (!cur || r.sig.score > cur.score) {
+          if (cur) signals.splice(signals.indexOf(cur), 1);
+          signals.push(r.sig);
+        }
+      }
+      if (r.manipScore >= 40) {
+        manipList.push({
+          symbol: r.symbol, tf: r.tf, price: r.price,
+          manipScore: r.manipScore, manipFlags: r.manipFlags,
+          absorption: r.absorption, exhaustion: r.exhaustion,
+          divergence: r.divergence, buyRatio: r.buyRatio,
+          delta: r.delta, volMult: r.volMult
+        });
       }
     }
 
-    S.metrics = best;
-    S.signals = Object.values(sigMap).sort((a, b) => b.score - a.score);
+    STATE.results = best;
+    STATE.signals = signals.sort((a,b) => (b.aiProb + b.score) - (a.aiProb + a.score));
+    STATE.manipOnly = manipList.sort((a,b) => b.manipScore - a.manipScore);
+    STATE.lastScanMs = Date.now();
+
     setProgress(1);
     renderSignals();
     renderResearch();
+    renderManip();
+    renderAI();
 
-    const elapsed = ((Date.now() - S.scanStart) / 1000).toFixed(1);
-    $("status").textContent = S.signals.length + " signals · " + Object.keys(best).length + " pairs · " + elapsed + "s";
-    log("scan complete: " + S.signals.length + " signals from " + Object.keys(best).length + " pairs in " + elapsed + "s", "ok");
-    if (S.lastErrors.length) log("errors: " + S.lastErrors.length + " (first: " + S.lastErrors[0] + ")", "warn");
+    const dur = ((Date.now()-t0)/1000).toFixed(1);
+    $("status").textContent = STATE.signals.length + " signals · " + Object.keys(best).length + " pairs · " + dur + "s";
+    $("status").className = "ok";
+    log("scan complete: " + STATE.signals.length + " signals from " + Object.keys(best).length + " pairs in " + dur + "s", "ok");
   } catch(e) {
     $("status").className = "err";
-    $("status").textContent = "scan failed";
+    $("status").textContent = "scan failed: " + e.message;
     log("scan failed: " + e.message, "fail");
   } finally {
-    S.scanning = false;
+    STATE.scanning = false;
   }
 }
 
-/* ============================================================
-   SIGNALS TAB
-============================================================ */
+/* ================================================================
+   RENDERERS
+   ================================================================ */
+function renderStats() {
+  const el = $("signalStats");
+  const total = Object.keys(STATE.results).length;
+  const signals = STATE.signals.length;
+  const longs = STATE.signals.filter(s => s.dir === "BULLISH").length;
+  const shorts = STATE.signals.filter(s => s.dir === "BEARISH").length;
+  const highConv = STATE.signals.filter(s => s.aiProb >= 70).length;
+  const last = STATE.lastScanMs ? new Date(STATE.lastScanMs).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "—";
+  el.innerHTML = `
+    <div class="stat"><div class="k">PAIRS</div><div class="v">${total}</div></div>
+    <div class="stat"><div class="k">SIGNALS</div><div class="v" style="color:var(--green)">${signals}</div></div>
+    <div class="stat"><div class="k">LONG/SHORT</div><div class="v"><span style="color:var(--green)">${longs}</span>/<span style="color:var(--red)">${shorts}</span></div></div>
+    <div class="stat"><div class="k">HIGH CONF</div><div class="v" style="color:var(--amber)">${highConv}</div></div>
+  `;
+}
+
 function renderSignals() {
-  const f = S.sigFilter;
-  const list = S.signals.filter(s => f === "all" || s.dir === f);
+  renderStats();
+  const f = STATE.sigFilter;
+  let list = STATE.signals;
+  if (f === "BULLISH" || f === "BEARISH") list = list.filter(s => s.dir === f);
+  if (f === "high") list = list.filter(s => s.aiProb >= 70);
+  if (f === "manip") list = list.filter(s => s.manip >= 40);
+
   const el = $("feed");
   if (!list.length) {
-    el.innerHTML = '<div class="empty">No qualifying setups right now.<br><br>The engine is running: check the Research tab for live metrics on every pair, and lower the Min score in Setup if the feed is quiet.</div>';
+    el.innerHTML = '<div class="empty">No signals above threshold.<br><br>The engine is running. Check <b>Research</b> for live metrics on every pair and <b>Setup</b> to lower thresholds.</div>';
     return;
   }
   el.innerHTML = list.map(s => {
     const cls = s.dir === "BULLISH" ? "bullish" : "bearish";
-    const sc = s.score >= 80 ? "high" : "mid";
-    const tags = s.tags.map(t => '<span class="tag ' + (t[1] ? (t[2] || "on") : "") + '">' + t[0] + '</span>').join("");
+    const sc = s.aiProb >= 70 ? "high" : s.aiProb >= 60 ? "mid" : "low";
+    const tags = s.tags.map(t => '<span class="tag ' + (t[1] ? (t[2]||"on") : "off") + '">' + t[0] + '</span>').join("");
     return '<div class="card ' + cls + '" data-sym="' + s.symbol + '">' +
       '<div class="card-top">' +
-        '<div><span class="symbol">' + s.symbol.replace("USDT", "") + '</span><span class="tf">' + s.tf + '</span></div>' +
-        '<span class="score ' + sc + '">' + s.score + ' ' + (s.dir === "BULLISH" ? "▲" : "▼") + '</span>' +
+        '<div class="symwrap"><span class="symbol">' + s.symbol.replace("USDT","") + '</span><span class="tf">' + s.tf + '</span></div>' +
+        '<span class="score ' + sc + '">' + s.aiProb + '% ' + (s.dir === "BULLISH" ? "▲" : "▼") + '</span>' +
       '</div>' +
       '<div class="tagrow">' + tags + '</div>' +
       '<div class="levels">' +
         '<div class="lb"><span class="ll">ENTRY</span><span class="lv">' + fmt(s.entry) + '</span></div>' +
         '<div class="lb"><span class="ll">STOP</span><span class="lv" style="color:var(--red)">' + fmt(s.stop) + '</span></div>' +
-        '<div class="lb"><span class="ll">TARGET</span><span class="lv" style="color:var(--green)">' + fmt(s.tp) + '</span></div>' +
-        '<div class="lb"><span class="ll">R:R</span><span class="lv">' + s.rr.toFixed(1) + '</span></div>' +
+        '<div class="lb"><span class="ll">TP1</span><span class="lv" style="color:var(--green)">' + fmt(s.tp1) + '</span></div>' +
+        '<div class="lb"><span class="ll">TP2</span><span class="lv" style="color:var(--green)">' + fmt(s.tp2) + '</span></div>' +
       '</div>' +
-      '<div class="note">' + s.note + '</div>' +
+      '<div class="note">SCORE ' + s.score + ' · MANIP ' + s.manip + ' · R:R ' + s.rr.toFixed(1) + ' · ' + s.note + '</div>' +
     '</div>';
   }).join("");
-  el.querySelectorAll(".card").forEach(c => c.addEventListener("click", () => openChart(c.dataset.sym)));
+  el.querySelectorAll(".card").forEach(c => {
+    c.addEventListener("click", () => openChart(c.dataset.sym));
+  });
 }
 
-/* ============================================================
-   RESEARCH TAB
-============================================================ */
 function renderResearch() {
   const sort = $("sortSel").value;
-  const rows = Object.values(S.metrics);
+  const rows = Object.values(STATE.results);
   if (!rows.length) {
     $("researchList").innerHTML = '<div class="empty">No data yet.</div>';
     return;
   }
   const keyMap = {
+    prob: r => r.aiProb,
     score: r => r.score,
     delta: r => Math.abs(r.delta),
+    buyratio: r => Math.abs(r.buyRatio - 0.5),
     vol: r => r.volMult,
-    atr: r => r.atrPct
+    atr: r => r.atrPct,
+    manip: r => r.manipScore
   };
-  const key = keyMap[sort] || keyMap.score;
-  rows.sort((a, b) => key(b) - key(a));
+  const key = keyMap[sort] || keyMap.prob;
+  rows.sort((a,b) => key(b) - key(a));
 
   $("researchList").innerHTML = rows.map(r => {
     const brPill = r.buyRatio >= 0.55 ? "on" : r.buyRatio <= 0.45 ? "bear" : "";
     const dzPill = Math.abs(r.deltaZ) >= 1.5 ? "blue" : "";
-    const struct = r.bosBull ? "BOS↑" : r.bosBear ? "BOS↓" : r.obBull ? "OB↑" : r.obBear ? "OB↓" : "—";
-    const structCls = (r.bosBull || r.obBull) ? "on" : (r.bosBear || r.obBear) ? "bear" : "";
-    const sweepPill = r.sweepLow ? "SWEEP↓" : r.sweepHigh ? "SWEEP↑" : "";
+    const aiPill = r.aiProb >= 70 ? "on" : r.aiProb >= 55 ? "warn" : "";
     return '<div class="rrow" data-sym="' + r.symbol + '">' +
       '<div class="rleft">' +
-        '<div><span class="rsym">' + r.symbol.replace("USDT", "") + '</span><span class="rtf">' + r.tf + '</span></div>' +
+        '<div><span class="rsym">' + r.symbol.replace("USDT","") + '</span><span class="rtf">' + r.tf + '</span></div>' +
         '<div class="rprice">' + fmt(r.price) + '</div>' +
+        '<div class="rsub">RSI ' + (isFinite(r.rsi) ? r.rsi.toFixed(0) : "—") + ' · ATR ' + r.atrPct.toFixed(1) + '%</div>' +
       '</div>' +
       '<div class="rmetrics">' +
+        '<span class="pill ' + aiPill + '">AI ' + r.aiProb + '%</span>' +
         '<span class="pill ' + (r.score >= CFG.minScore ? "on" : "") + '">S' + r.score + '</span>' +
-        '<span class="pill ' + brPill + '">BR' + (r.buyRatio * 100).toFixed(0) + '%</span>' +
-        '<span class="pill ' + dzPill + '">ΔZ' + r.deltaZ.toFixed(1) + '</span>' +
+        '<span class="pill ' + brPill + '">BR ' + (r.buyRatio*100).toFixed(0) + '%</span>' +
+        '<span class="pill ' + dzPill + '">ΔZ ' + r.deltaZ.toFixed(1) + '</span>' +
         '<span class="pill ' + (r.volMult >= CFG.volMult ? "on" : "") + '">V' + r.volMult.toFixed(1) + 'x</span>' +
-        '<span class="pill ' + structCls + '">' + struct + '</span>' +
-        (sweepPill ? '<span class="pill warn">' + sweepPill + '</span>' : "") +
+        '<span class="pill ' + (r.manipScore >= 40 ? "danger" : "") + '">M' + r.manipScore + '</span>' +
       '</div>' +
     '</div>';
   }).join("");
@@ -687,884 +1327,106 @@ function renderResearch() {
   });
 }
 
-/* ============================================================
-   CHART
-============================================================ */
-function fillChartSelect() {
-  const sel = $("chartSym");
-  const cur = S.chartSym;
-  sel.innerHTML = S.universe.map(u => '<option value="' + u.symbol + '">' + u.base + '</option>').join("");
-  if (cur && S.universe.some(u => u.symbol === cur)) sel.value = cur;
-  else S.chartSym = S.universe.length ? S.universe[0].symbol : null;
-  if (S.chartSym) sel.value = S.chartSym;
-}
-
-function initChart() {
-  const container = $("chartContainer");
-  if (S.chart) return;
-  S.chart = LightweightCharts.createChart(container, {
-    layout: { background: { color: "#151a23" }, textColor: "#848e9c" },
-    grid: { vertLines: { color: "#1b212c" }, horzLines: { color: "#1b212c" } },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: "#232936" },
-    timeScale: { borderColor: "#232936", timeVisible: true, secondsVisible: false },
-    handleScroll: true, handleScale: true
-  });
-  S.candleSeries = S.chart.addCandlestickSeries({
-    upColor: "#0ecb81", downColor: "#f6465d",
-    borderVisible: false,
-    wickUpColor: "#0ecb81", wickDownColor: "#f6465d"
-  });
-  new ResizeObserver(() => {
-    if (S.chart) {
-      S.chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight
-      });
-    }
-  }).observe(container);
-}
-
-async function loadChart() {
-  if (!S.chartSym) { $("chartLegend").textContent = "no pair"; return; }
-  $("chartLegend").textContent = "loading…";
-  try {
-    initChart();
-    const url = CFG.base + "/api/v3/klines?symbol=" + S.chartSym + "&interval=" + S.chartTf + "&limit=" + CFG.klinesLimit;
-    const kl = await getJSON(url, 20000);
-    const candles = kl.map(k => ({
-      time: Math.floor(+k[0] / 1000),
-      open: +k[1], high: +k[2], low: +k[3], close: +k[4]
-    }));
-    S.candleSeries.setData(candles);
-    S.chart.timeScale().fitContent();
-    const last = +kl[kl.length - 1][4];
-    const prev = +kl[kl.length - 2][4];
-    const ch = (last / prev - 1) * 100;
-    const tbVol = +kl[kl.length - 1][9];
-    const totVol = +kl[kl.length - 1][5];
-    const br = totVol > 0 ? (tbVol / totVol * 100).toFixed(0) : "0";
-    $("chartLegend").innerHTML =
-      '<b>' + S.chartSym + '</b> · ' + S.chartTf + ' · ' + fmt(last) +
-      ' <span class="' + (ch >= 0 ? "up" : "down") + '">' +
-      (ch >= 0 ? "+" : "") + ch.toFixed(2) + '%</span>' +
-      ' · buy ' + br + '%';
-  } catch(e) {
-    $("chartLegend").textContent = "chart failed: " + e.message;
-    log("chart failed: " + e.message, "fail");
-  }
-}
-
-function openChart(sym) {
-  S.chartSym = sym;
-  $("chartSym").value = sym;
-  switchTab("chart");
-  setTimeout(loadChart, 50);
-}
-
-/* ============================================================
-   TABS
-============================================================ */
-function switchTab(name) {
-  document.querySelectorAll(".tab").forEach(t => {
-    t.classList.toggle("active", t.id === "tab-" + name);
-  });
-  document.querySelectorAll("nav button").forEach(b => {
-    b.classList.toggle("on", b.dataset.tab === name);
-  });
-  if (name === "chart") setTimeout(() => { initChart(); loadChart(); }, 50);
-  if (name === "research") renderResearch();
-}
-
-/* ============================================================
-   WIRING
-============================================================ */
-document.querySelectorAll("nav button").forEach(b => {
-  b.addEventListener("click", () => switchTab(b.dataset.tab));
-});
-
-$("sigSeg").addEventListener("click", e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  S.sigFilter = b.dataset.f;
-  [].slice.call($("sigSeg").children).forEach(x => x.classList.toggle("on", x === b));
-  renderSignals();
-});
-
-$("sortSel").addEventListener("change", renderResearch);
-
-$("chartSym").addEventListener("change", e => {
-  S.chartSym = e.target.value;
-  loadChart();
-});
-
-$("chartTfs").addEventListener("click", e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  S.chartTf = b.dataset.tf;
-  [].slice.call($("chartTfs").children).forEach(x => x.classList.toggle("on", x === b));
-  loadChart();
-});
-
-function bindSlider(inp, out, key, decimals) {
-  const el = $(inp), outEl = $(out);
-  el.value = CFG[key];
-  outEl.textContent = decimals ? CFG[key].toFixed(decimals) : CFG[key];
-  el.addEventListener("input", () => {
-    CFG[key] = parseFloat(el.value);
-    outEl.textContent = decimals ? CFG[key].toFixed(decimals) : CFG[key];
-    saveCfg();
-  });
-}
-
-bindSlider("in-score", "v-score", "minScore", 0);
-bindSlider("in-vol", "v-vol", "volMult", 1);
-bindSlider("in-disp", "v-disp", "dispBodyATR", 1);
-bindSlider("in-top", "v-top", "topN", 0);
-
-$("btnRefresh").addEventListener("click", () => {
-  S.universe = [];
-  scan();
-});
-
-/* ============================================================
-   BOOT
-============================================================ */
-(async function boot() {
-  log("boot start", "info");
-  try {
-    await loadUniverse();
-    initChart();
-    await scan();
-  } catch(e) {
-    $("status").className = "err";
-    $("status").textContent = "boot failed: " + e.message;
-    log("boot failed: " + e.message, "fail");
-  }
-  setInterval(scan, CFG.refreshMs);
-})();
-</script>
-</body>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0b0e14">
-<title>Orderflow Terminal</title>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<style>
-:root{--bg:#0b0e14;--card:#151a23;--line:#232936;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--purple:#a855f7;--text:#eaecef;--muted:#848e9c}
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--text);padding-bottom:calc(66px + env(safe-area-inset-bottom));overflow-x:hidden}
-header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 12px 6px;border-bottom:1px solid var(--line)}
-.hrow{display:flex;justify-content:space-between;align-items:baseline}
-h1{font-size:15px;letter-spacing:1.5px;color:var(--muted);font-weight:700}
-#status{font-size:11px;color:var(--muted);text-align:right}
-#status.err{color:var(--red)}
-#progress{height:2px;background:var(--line);margin-top:8px;border-radius:2px;overflow:hidden}
-#progress i{display:block;height:100%;width:0;background:var(--green);transition:width .15s}
-main{padding:12px}
-.tab{display:none}.tab.active{display:block}
-.grid{display:grid;gap:10px;grid-template-columns:1fr}
-.card{background:var(--card);border-radius:12px;padding:13px;border-left:4px solid var(--muted)}
-.card.bullish{border-left-color:var(--green)}.card.bearish{border-left-color:var(--red)}
-.card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.symbol{font-size:16px;font-weight:700}.tf{font-size:11px;color:var(--muted);margin-left:6px;font-weight:500}
-.score{font-size:12px;padding:3px 8px;border-radius:6px;background:#1e2329;font-weight:600}
-.score.high{color:var(--green)}.score.mid{color:var(--amber)}
-.tagrow{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
-.tag{font-size:10px;padding:2px 6px;border-radius:4px;background:#1e2329;color:#5d6675}
-.tag.on{background:#0ecb8122;color:var(--green)}
-.tag.warn{background:#f0b90b22;color:var(--amber)}
-.tag.danger{background:#a855f722;color:var(--purple)}
-.tag.blue{background:#3b82f622;color:var(--blue)}
-.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center}
-.lb{background:#1e2329;padding:6px 3px;border-radius:6px}
-.ll{color:var(--muted);font-size:9px;display:block;margin-bottom:2px}
-.lv{font-weight:600}
-.note{font-size:10px;color:var(--muted);margin-top:9px;line-height:1.45}
-.empty{color:var(--muted);font-size:13px;padding:24px 0;text-align:center;line-height:1.6}
-.seg{display:flex;gap:6px;margin-bottom:12px}
-.seg button{flex:1;padding:7px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
-.seg button.on{background:#1e2329;color:var(--text);border-color:#2f3746}
-.chartbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-select{background:#1e2329;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;flex:1;min-width:0}
-.tfbtns{display:flex;gap:4px}
-.tfbtns button{padding:7px 9px;font-size:11px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
-.tfbtns button.on{background:#1e2329;color:var(--text);border-color:#2f3746}
-#chartContainer{height:56vh;min-height:320px;background:var(--card);border-radius:12px;overflow:hidden}
-#chartLegend{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
-#chartLegend b{color:var(--text)}
-.up{color:var(--green)}.down{color:var(--red)}
-.rrow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer}
-.rleft{min-width:76px}
-.rsym{font-size:14px;font-weight:700}
-.rtf{font-size:9px;color:var(--muted);margin-left:4px}
-.rprice{font-size:12px;color:var(--text)}
-.rmetrics{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
-.pill{font-size:9.5px;padding:2px 5px;border-radius:4px;background:#1e2329;color:#7d8797;white-space:nowrap}
-.pill.on{background:#0ecb8122;color:var(--green)}
-.pill.bear{background:#f6465d18;color:var(--red)}
-.pill.warn{background:#f0b90b22;color:var(--amber)}
-.pill.blue{background:#3b82f622;color:var(--blue)}
-.pill.danger{background:#a855f722;color:var(--purple)}
-.setblock{margin-bottom:16px}
-.setblock label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
-.setblock label b{color:var(--text)}
-input[type=range]{width:100%;accent-color:#0ecb81;height:26px}
-.bigbtn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#04170f;font-weight:700;font-size:14px;margin-top:6px;cursor:pointer}
-.fineprint{font-size:10px;color:#5d6675;line-height:1.6;margin-top:14px}
-#debug{background:#101822;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.6;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
-#debug .ok{color:var(--green)}#debug .fail{color:var(--red)}#debug .warn{color:var(--amber)}#debug .info{color:var(--blue)}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0f131b;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
-nav button{flex:1;padding:14px 4px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.3px;cursor:pointer}
-nav button.on{color:var(--green)}
-@media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:1024px){.grid{grid-template-columns:repeat(3,1fr)}main{max-width:1250px;margin:0 auto}}
-</style>
-</head>
-<body>
-
-<header>
-  <div class="hrow"><h1>ORDERFLOW</h1><span id="status">booting…</span></div>
-  <div id="progress"><i></i></div>
-</header>
-
-<main>
-  <section id="tab-signals" class="tab active">
-    <div class="seg" id="sigSeg">
-      <button data-f="all" class="on">All</button>
-      <button data-f="BULLISH">Long</button>
-      <button data-f="BEARISH">Short</button>
-    </div>
-    <div id="feed" class="grid"><div class="empty">scanning…</div></div>
-  </section>
-
-  <section id="tab-chart" class="tab">
-    <div class="chartbar">
-      <select id="chartSym"></select>
-      <div class="tfbtns" id="chartTfs">
-        <button data-tf="15m">15m</button>
-        <button data-tf="1h" class="on">1h</button>
-        <button data-tf="4h">4h</button>
-        <button data-tf="1d">1d</button>
-      </div>
-    </div>
-    <div id="chartContainer"></div>
-    <div id="chartLegend">select a pair</div>
-  </section>
-
-  <section id="tab-research" class="tab">
-    <div class="chartbar">
-      <select id="sortSel">
-        <option value="score">sort: score</option>
-        <option value="delta">sort: taker delta</option>
-        <option value="vol">sort: volume multiple</option>
-        <option value="atr">sort: volatility</option>
-      </select>
-    </div>
-    <div id="researchList"><div class="empty">scanning…</div></div>
-  </section>
-
-  <section id="tab-setup" class="tab">
-    <div class="setblock"><label>Min score <b id="v-score">50</b></label><input type="range" id="in-score" min="20" max="95" step="1"></div>
-    <div class="setblock"><label>Volume multiple <b id="v-vol">2.0</b>x</label><input type="range" id="in-vol" min="1.2" max="8" step="0.1"></div>
-    <div class="setblock"><label>Displacement <b id="v-disp">1.2</b> ATR</label><input type="range" id="in-disp" min="0.8" max="3" step="0.1"></div>
-    <div class="setblock"><label>Universe size <b id="v-top">40</b></label><input type="range" id="in-top" min="10" max="100" step="10"></div>
-    <button id="btnRefresh" class="bigbtn">Rescan now</button>
-    <p class="fineprint">Order flow comes from Binance klines field 9 (taker buy volume) — the buy-side of every candle. Sell volume = total − taker buy. Features: volume anomaly, taker delta, delta z-score, displacement, close position, order block, FVG, BOS/CHoCH, liquidity sweep, turtle soup, Wyckoff narrowing, premium/discount, HTF bias.</p>
-    <div id="debug">ready</div>
-  </section>
-</main>
-
-<nav>
-  <button data-tab="signals" class="on">Signals</button>
-  <button data-tab="chart">Chart</button>
-  <button data-tab="research">Research</button>
-  <button data-tab="setup">Setup</button>
-</nav>
-
-<script>
-/* ============================================================
-   CONFIG
-============================================================ */
-const DEFAULTS = {
-  topN: 40,
-  minScore: 50,
-  volMult: 2.0,
-  dispBodyATR: 1.2,
-  atrLen: 14,
-  volLookback: 20,
-  swingLookback: 2,
-  eqTolPct: 0.0015,
-  scanTfs: ["1h", "4h"],
-  refreshMs: 180000,
-  klinesLimit: 300,
-  base: "https://data-api.binance.vision"
-};
-
-let CFG = Object.assign({}, DEFAULTS);
-try { Object.assign(CFG, JSON.parse(localStorage.getItem("of_cfg") || "{}")); } catch(e) {}
-function saveCfg() {
-  try {
-    localStorage.setItem("of_cfg", JSON.stringify({
-      topN: CFG.topN, minScore: CFG.minScore, volMult: CFG.volMult,
-      dispBodyATR: CFG.dispBodyATR
-    }));
-  } catch(e) {}
-}
-
-const S = {
-  universe: [], metrics: {}, signals: [],
-  chartSym: null, chartTf: "1h",
-  scanning: false, sigFilter: "all",
-  chart: null, candleSeries: null,
-  lastErrors: [], scanStart: 0, scanDone: 0, scanTotal: 0
-};
-
-const $ = id => document.getElementById(id);
-const fmt = n => {
-  if (!isFinite(n)) return "-";
-  const a = Math.abs(n);
-  if (a >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
-  if (a >= 1) return n.toFixed(3);
-  if (a >= 0.01) return n.toFixed(4);
-  return n.toPrecision(4);
-};
-
-/* ============================================================
-   LOGGING
-============================================================ */
-function log(msg, type) {
-  const el = $("debug");
-  const d = document.createElement("div");
-  d.className = type || "ok";
-  d.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
-  el.appendChild(d);
-  el.scrollTop = el.scrollHeight;
-}
-
-/* ============================================================
-   DATA LAYER
-============================================================ */
-const cache = new Map();
-async function getJSON(url, ttl) {
-  const now = Date.now();
-  const hit = cache.get(url);
-  if (hit && now - hit.ts < ttl) return hit.data;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  const d = await r.json();
-  cache.set(url, { ts: now, data: d });
-  return d;
-}
-
-async function pool(items, worker, limit) {
-  const out = new Array(items.length);
-  let i = 0;
-  async function run() {
-    while (i < items.length) {
-      const k = i++;
-      try { out[k] = await worker(items[k], k); }
-      catch(e) { out[k] = { error: e.message }; }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
-  return out;
-}
-
-const STABLES = new Set(["USDC","FDUSD","TUSD","BUSD","DAI","EUR","GBP","AEUR","USDP","USD1","XUSD","USDE","PAXG"]);
-
-async function loadUniverse() {
-  log("loading universe…", "info");
-  const t = await getJSON(CFG.base + "/api/v3/ticker/24hr", 60000);
-  const rows = t
-    .filter(x => x.symbol.endsWith("USDT"))
-    .map(x => ({
-      symbol: x.symbol,
-      base: x.symbol.slice(0, -4),
-      price: +x.lastPrice,
-      chg: +x.priceChangePercent,
-      quoteVol: +x.quoteVolume
-    }))
-    .filter(x => !STABLES.has(x.base))
-    .filter(x => !(x.base.length >= 5 && /(UP|DOWN|BULL|BEAR)$/.test(x.base)))
-    .sort((a, b) => b.quoteVol - a.quoteVol)
-    .slice(0, CFG.topN);
-  S.universe = rows;
-  log("universe loaded: " + rows.length + " pairs", "ok");
-  fillChartSelect();
-  return rows;
-}
-
-/* ============================================================
-   MATH HELPERS
-============================================================ */
-function smaAt(arr, i, n) {
-  let s = 0;
-  for (let k = i - n + 1; k <= i; k++) s += arr[k];
-  return s / n;
-}
-function stdAt(arr, i, n) {
-  const m = smaAt(arr, i, n);
-  let s = 0;
-  for (let k = i - n + 1; k <= i; k++) s += Math.pow(arr[k] - m, 2);
-  return Math.sqrt(s / n);
-}
-function atrSeries(h, l, c, n) {
-  const tr = [];
-  for (let i = 0; i < c.length; i++) {
-    if (i === 0) { tr.push(h[i] - l[i]); continue; }
-    tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i-1]), Math.abs(l[i] - c[i-1])));
-  }
-  const out = [];
-  for (let i = 0; i < tr.length; i++) out.push(i < n - 1 ? NaN : smaAt(tr, i, n));
-  return out;
-}
-function findSwings(h, l, n) {
-  const sh = [], sl = [];
-  for (let i = n; i < h.length - n; i++) {
-    let isH = true, isL = true;
-    for (let j = 1; j <= n; j++) {
-      if (h[i] <= h[i-j] || h[i] <= h[i+j]) isH = false;
-      if (l[i] >= l[i-j] || l[i] >= l[i+j]) isL = false;
-    }
-    if (isH) sh.push({ i, p: h[i] });
-    if (isL) sl.push({ i, p: l[i] });
-  }
-  return { sh, sl };
-}
-function clusterLevels(swings, tol) {
-  const out = [], used = new Array(swings.length).fill(false);
-  for (let i = 0; i < swings.length; i++) {
-    if (used[i]) continue;
-    const g = [swings[i]];
-    used[i] = true;
-    for (let j = i + 1; j < swings.length; j++) {
-      if (used[j]) continue;
-      if (Math.abs(swings[j].p - swings[i].p) / swings[i].p <= tol) {
-        g.push(swings[j]);
-        used[j] = true;
-      }
-    }
-    if (g.length >= 2) {
-      out.push({
-        level: g.reduce((s, x) => s + x.p, 0) / g.length,
-        count: g.length,
-        lastIdx: Math.max.apply(null, g.map(x => x.i))
-      });
-    }
-  }
-  return out;
-}
-
-/* ============================================================
-   CORE ANALYSIS ENGINE
-   Uses klines fields:
-   [0] openTime, [1] open, [2] high, [3] low, [4] close,
-   [5] volume, [6] closeTime, [7] quoteVolume,
-   [8] trades, [9] takerBuyBase, [10] takerBuyQuote, [11] ignore
-============================================================ */
-function analyze(kl, tf, symbol) {
-  const n = kl.length;
-  if (n < 100) return null;
-
-  const o = kl.map(k => +k[1]);
-  const h = kl.map(k => +k[2]);
-  const l = kl.map(k => +k[3]);
-  const c = kl.map(k => +k[4]);
-  const v = kl.map(k => +k[5]);
-  const tb = kl.map(k => +k[9]); // taker buy volume
-  const last = n - 1;
-
-  const atr = atrSeries(h, l, c, CFG.atrLen);
-  const A = atr[last];
-  if (!isFinite(A) || A <= 0) return null;
-
-  /* ---- TAKER ORDER FLOW ---- */
-  const buyVol = tb[last];
-  const sellVol = v[last] - buyVol;
-  const delta = buyVol - sellVol;
-  const buyRatio = v[last] > 0 ? buyVol / v[last] : 0.5;
-
-  /* cumulative delta z-score over last 20 bars */
-  const deltaSeries = [];
-  for (let i = Math.max(0, last - 20); i <= last; i++) {
-    deltaSeries.push(2 * tb[i] - v[i]);
-  }
-  const deltaMean = deltaSeries.reduce((s, x) => s + x, 0) / deltaSeries.length;
-  const deltaStd = Math.sqrt(deltaSeries.reduce((s, x) => s + Math.pow(x - deltaMean, 2), 0) / deltaSeries.length) || 1;
-  const deltaZ = (delta - deltaMean) / deltaStd;
-
-  /* cumulative delta across window */
-  let cumDelta = 0;
-  for (let i = last - 19; i <= last; i++) cumDelta += 2 * tb[i] - v[i];
-
-  /* ---- VOLUME ANOMALY ---- */
-  const volBase = smaAt(v, last - 1, CFG.volLookback);
-  const volMult = volBase > 0 ? v[last] / volBase : 0;
-
-  /* ---- CANDLE STRUCTURE ---- */
-  const range = h[last] - l[last];
-  if (range <= 0) return null;
-  const closePos = (c[last] - l[last]) / range;
-  const bodyATR = Math.abs(c[last] - o[last]) / A;
-  const atrPct = A / c[last] * 100;
-
-  const bullCandle = c[last] > o[last];
-  const bearCandle = c[last] < o[last];
-  const dispBull = bodyATR >= CFG.dispBodyATR && closePos >= 0.7 && bullCandle;
-  const dispBear = bodyATR >= CFG.dispBodyATR && (1 - closePos) >= 0.7 && bearCandle;
-
-  /* ---- SWING STRUCTURE ---- */
-  const { sh, sl } = findSwings(h, l, CFG.swingLookback);
-  const pSH = sh.filter(s => s.i < last - 1);
-  const pSL = sl.filter(s => s.i < last - 1);
-  const lSH = pSH.length ? pSH[pSH.length - 1] : null;
-  const lSL = pSL.length ? pSL[pSL.length - 1] : null;
-
-  const bosBull = !!(lSH && c[last] > lSH.p && c[last-1] <= lSH.p);
-  const bosBear = !!(lSL && c[last] < lSL.p && c[last-1] >= lSL.p);
-
-  /* ---- ORDER BLOCK ---- */
-  /* Bull OB: last bearish candle before a bullish displacement */
-  /* Bear OB: last bullish candle before a bearish displacement */
-  let obBull = false, obBear = false;
-  let obLevel = null;
-  for (let i = last - 6; i <= last - 1; i++) {
-    if (i < 1) continue;
-    const prevBodyATR = Math.abs(c[i] - o[i]) / A;
-    if (dispBull && c[i] < o[i] && c[last] > h[i]) {
-      obBull = true;
-      obLevel = { high: h[i], low: l[i] };
-    }
-    if (dispBear && c[i] > o[i] && c[last] < l[i]) {
-      obBear = true;
-      obLevel = { high: h[i], low: l[i] };
-    }
-  }
-
-  /* ---- FAIR VALUE GAP (unfilled, last 8 bars) ---- */
-  let fvgBull = false, fvgBear = false;
-  for (let i = Math.max(2, last - 8); i <= last; i++) {
-    if (l[i] > h[i-2]) fvgBull = true;
-    if (h[i] < l[i-2]) fvgBear = true;
-  }
-
-  /* ---- LIQUIDITY SWEEP (equal highs/lows) ---- */
-  const hp = clusterLevels(sh, CFG.eqTolPct).filter(p => p.lastIdx < last - 3);
-  const lp = clusterLevels(sl, CFG.eqTolPct).filter(p => p.lastIdx < last - 3);
-  let sweepHigh = false, sweepLow = false, sweepLevel = null;
-  for (let i = Math.max(0, last - 3); i <= last; i++) {
-    for (const p of hp) {
-      if (h[i] > p.level && c[i] < p.level) { sweepHigh = true; sweepLevel = p.level; }
-    }
-    for (const p of lp) {
-      if (l[i] < p.level && c[i] > p.level) { sweepLow = true; sweepLevel = p.level; }
-    }
-  }
-
-  /* ---- TURTLE SOUP ---- */
-  const turtleBull = !!(lSL && l[last] < lSL.p && c[last] > lSL.p && (lSL.p - l[last]) > Math.abs(c[last] - o[last]) * 0.7);
-  const turtleBear = !!(lSH && h[last] > lSH.p && c[last] < lSH.p && (h[last] - lSH.p) > Math.abs(c[last] - o[last]) * 0.7);
-
-  /* ---- WYCKOFF NARROWING RANGE ---- */
-  const ranges = [];
-  for (let i = Math.max(0, last - 20); i <= last; i++) ranges.push(h[i] - l[i]);
-  const firstAvg = ranges.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
-  const lastAvg = ranges.slice(-10).reduce((a, b) => a + b, 0) / 10;
-  const narrowing = firstAvg > 0 && lastAvg / firstAvg < 0.65;
-
-  /* ---- PREMIUM / DISCOUNT ---- */
-  const hi20 = Math.max.apply(null, h.slice(-20));
-  const lo20 = Math.min.apply(null, l.slice(-20));
-  const eq = (hi20 + lo20) / 2;
-  const inDiscount = c[last] < eq;
-  const inPremium = c[last] > eq;
-
-  /* ---- HTF BIAS ---- */
-  const ref50 = c[Math.max(0, last - 50)];
-  const htfBull = c[last] > ref50 && smaAt(c, last, 20) > smaAt(c, last - 1, 20);
-  const htfBear = c[last] < ref50 && smaAt(c, last, 20) < smaAt(c, last - 1, 20);
-
-  /* ---- KILL ZONE ---- */
-  const hr = new Date().getUTCHours();
-  const killZone = (hr >= 7 && hr <= 10) || (hr >= 12 && hr <= 15);
-
-  /* ============================================================
-     SCORING — weighted confluence
-  ============================================================ */
-  let score = 0;
-  const tags = [];
-  function add(cond, pts, label, cls) {
-    if (cond) { score += pts; tags.push([label, 1, cls || "on"]); }
-    else tags.push([label, 0, ""]);
-  }
-
-  add(volMult >= CFG.volMult, Math.min(18, 8 + volMult * 2), "VOL " + volMult.toFixed(1) + "x");
-  add(Math.abs(buyRatio - 0.5) >= 0.15, 14, "BR " + (buyRatio * 100).toFixed(0) + "%", "blue");
-  add(Math.abs(deltaZ) >= 1.5, 14, "DZ " + deltaZ.toFixed(1), "blue");
-  add(Math.abs(cumDelta) > volBase * 3, 10, "CVD " + (cumDelta > 0 ? "↑" : "↓"), "blue");
-  add(dispBull || dispBear, 15, "DISP");
-  add(closePos >= 0.7 || (1 - closePos) >= 0.7, 8, "CLOSE");
-  add(obBull || obBear, 10, obBull ? "OB↑" : obBear ? "OB↓" : "OB", "warn");
-  add(fvgBull || fvgBear, 6, "FVG");
-  add(bosBull || bosBear, 10, bosBull ? "BOS↑" : bosBear ? "BOS↓" : "BOS");
-  add(sweepHigh || sweepLow, 14, sweepHigh ? "SWEEP↑" : sweepLow ? "SWEEP↓" : "SWEEP", "warn");
-  add(turtleBull || turtleBear, 12, turtleBull ? "TURTLE↑" : turtleBear ? "TURTLE↓" : "TURTLE", "danger");
-  add(narrowing, 6, "WYK", "warn");
-  add((inDiscount && htfBull) || (inPremium && htfBear), 8, "P/D");
-  add(htfBull || htfBear, 6, "HTF");
-  add(killZone, 4, "KZ");
-
-  const base = {
-    symbol, tf, price: c[last],
-    closePos, volMult, bodyATR, atrPct,
-    buyRatio, delta, deltaZ, cumDelta,
-    drift: (c[last] / ref50 - 1) * 100,
-    narrowing, inDiscount, inPremium,
-    sweepHigh, sweepLow, sweepLevel,
-    bosBull, bosBear, obBull, obBear,
-    fvgBull, fvgBear, turtleBull, turtleBear,
-    dispBull, dispBear, htfBull, htfBear,
-    score, tags, sig: null
-  };
-
-  if (score < CFG.minScore) return base;
-
-  /* ============================================================
-     DIRECTION: order flow must agree with structure
-  ============================================================ */
-  let bull = 0, bear = 0;
-
-  if (buyRatio > 0.5) bull += Math.round((buyRatio - 0.5) * 20); else bear += Math.round((0.5 - buyRatio) * 20);
-  if (delta > 0) bull += 2; else bear += 2;
-  if (cumDelta > 0) bull += 1; else bear += 1;
-  if (dispBull) bull += 2;
-  if (dispBear) bear += 2;
-  if (bosBull) bull += 2;
-  if (bosBear) bear += 2;
-  if (obBull) bull += 1;
-  if (obBear) bear += 1;
-  if (sweepLow) bull += 2;
-  if (sweepHigh) bear += 2;
-  if (turtleBull) bull += 2;
-  if (turtleBear) bear += 2;
-  if (fvgBull) bull += 1;
-  if (fvgBear) bear += 1;
-  if (htfBull) bull += 1;
-  if (htfBear) bear += 1;
-  if (inDiscount) bull += 1;
-  if (inPremium) bear += 1;
-
-  if (bull === bear) return base;
-  const dir = bull > bear ? "BULLISH" : "BEARISH";
-
-  /* order flow confirmation veto: don't fire against taker flow strongly */
-  if (dir === "BULLISH" && buyRatio < 0.4) return base;
-  if (dir === "BEARISH" && buyRatio > 0.6) return base;
-
-  const entry = c[last];
-  let stop;
-  if (dir === "BULLISH") {
-    stop = (sweepLow && sweepLevel) ? Math.min(sweepLevel, l[last]) - A * 0.3 : l[last] - A * 0.5;
-  } else {
-    stop = (sweepHigh && sweepLevel) ? Math.max(sweepLevel, h[last]) + A * 0.3 : h[last] + A * 0.5;
-  }
-  const risk = Math.abs(entry - stop);
-  const tp = dir === "BULLISH" ? entry + risk * 2.5 : entry - risk * 2.5;
-
-  base.sig = {
-    symbol, tf, dir, score: Math.round(score),
-    entry, stop, tp, rr: risk > 0 ? Math.abs(tp - entry) / risk : 0,
-    tags,
-    note: tags.filter(t => t[1]).map(t => t[0]).join(" · ")
-  };
-  return base;
-}
-
-/* ============================================================
-   SCAN
-============================================================ */
-function setProgress(p) {
-  $("progress").firstElementChild.style.width = (p * 100).toFixed(1) + "%";
-}
-
-async function scan() {
-  if (S.scanning) return;
-  S.scanning = true;
-  S.lastErrors = [];
-  S.scanStart = Date.now();
-
-  try {
-    if (!S.universe.length) await loadUniverse();
-
-    const jobs = [];
-    for (const u of S.universe) {
-      for (const tf of CFG.scanTfs) jobs.push({ symbol: u.symbol, tf });
-    }
-    S.scanDone = 0;
-    S.scanTotal = jobs.length;
-    setProgress(0);
-    $("status").className = "";
-    $("status").textContent = "scanning 0/" + jobs.length;
-
-    const res = await pool(jobs, async (j) => {
-      const url = CFG.base + "/api/v3/klines?symbol=" + j.symbol + "&interval=" + j.tf + "&limit=" + CFG.klinesLimit;
-      const kl = await getJSON(url, 45000);
-      const r = analyze(kl, j.tf, j.symbol);
-      S.scanDone++;
-      if (S.scanDone % 8 === 0) {
-        setProgress(S.scanDone / S.scanTotal);
-        $("status").textContent = "scanning " + S.scanDone + "/" + S.scanTotal;
-      }
-      return r;
-    }, 6);
-
-    const best = {}, sigMap = {};
-    for (const r of res) {
-      if (!r || r.error) {
-        if (r && r.error) S.lastErrors.push(r.error);
-        continue;
-      }
-      if (!best[r.symbol] || r.score > best[r.symbol].score) best[r.symbol] = r;
-      if (r.sig) {
-        const cur = sigMap[r.symbol];
-        if (!cur || r.sig.score > cur.score) sigMap[r.symbol] = r.sig;
-      }
-    }
-
-    S.metrics = best;
-    S.signals = Object.values(sigMap).sort((a, b) => b.score - a.score);
-    setProgress(1);
-    renderSignals();
-    renderResearch();
-
-    const elapsed = ((Date.now() - S.scanStart) / 1000).toFixed(1);
-    $("status").textContent = S.signals.length + " signals · " + Object.keys(best).length + " pairs · " + elapsed + "s";
-    log("scan complete: " + S.signals.length + " signals from " + Object.keys(best).length + " pairs in " + elapsed + "s", "ok");
-    if (S.lastErrors.length) log("errors: " + S.lastErrors.length + " (first: " + S.lastErrors[0] + ")", "warn");
-  } catch(e) {
-    $("status").className = "err";
-    $("status").textContent = "scan failed";
-    log("scan failed: " + e.message, "fail");
-  } finally {
-    S.scanning = false;
-  }
-}
-
-/* ============================================================
-   SIGNALS TAB
-============================================================ */
-function renderSignals() {
-  const f = S.sigFilter;
-  const list = S.signals.filter(s => f === "all" || s.dir === f);
-  const el = $("feed");
-  if (!list.length) {
-    el.innerHTML = '<div class="empty">No qualifying setups right now.<br><br>The engine is running: check the Research tab for live metrics on every pair, and lower the Min score in Setup if the feed is quiet.</div>';
-    return;
-  }
-  el.innerHTML = list.map(s => {
-    const cls = s.dir === "BULLISH" ? "bullish" : "bearish";
-    const sc = s.score >= 80 ? "high" : "mid";
-    const tags = s.tags.map(t => '<span class="tag ' + (t[1] ? (t[2] || "on") : "") + '">' + t[0] + '</span>').join("");
-    return '<div class="card ' + cls + '" data-sym="' + s.symbol + '">' +
-      '<div class="card-top">' +
-        '<div><span class="symbol">' + s.symbol.replace("USDT", "") + '</span><span class="tf">' + s.tf + '</span></div>' +
-        '<span class="score ' + sc + '">' + s.score + ' ' + (s.dir === "BULLISH" ? "▲" : "▼") + '</span>' +
-      '</div>' +
-      '<div class="tagrow">' + tags + '</div>' +
-      '<div class="levels">' +
-        '<div class="lb"><span class="ll">ENTRY</span><span class="lv">' + fmt(s.entry) + '</span></div>' +
-        '<div class="lb"><span class="ll">STOP</span><span class="lv" style="color:var(--red)">' + fmt(s.stop) + '</span></div>' +
-        '<div class="lb"><span class="ll">TARGET</span><span class="lv" style="color:var(--green)">' + fmt(s.tp) + '</span></div>' +
-        '<div class="lb"><span class="ll">R:R</span><span class="lv">' + s.rr.toFixed(1) + '</span></div>' +
-      '</div>' +
-      '<div class="note">' + s.note + '</div>' +
-    '</div>';
-  }).join("");
-  el.querySelectorAll(".card").forEach(c => c.addEventListener("click", () => openChart(c.dataset.sym)));
-}
-
-/* ============================================================
-   RESEARCH TAB
-============================================================ */
-function renderResearch() {
-  const sort = $("sortSel").value;
-  const rows = Object.values(S.metrics);
+function renderManip() {
+  const sort = $("manipSort").value;
+  let rows = STATE.manipOnly.slice();
   if (!rows.length) {
-    $("researchList").innerHTML = '<div class="empty">No data yet.</div>';
+    $("manipList").innerHTML = '<div class="empty">No manipulation signatures detected.<br>Try lowering thresholds or waiting for the next scan.</div>';
     return;
   }
-  const keyMap = {
-    score: r => r.score,
-    delta: r => Math.abs(r.delta),
-    vol: r => r.volMult,
-    atr: r => r.atrPct
-  };
-  const key = keyMap[sort] || keyMap.score;
-  rows.sort((a, b) => key(b) - key(a));
+  if (sort === "manip") rows.sort((a,b) => b.manipScore - a.manipScore);
+  if (sort === "hunt") rows.sort((a,b) => (b.manipFlags.filter(f=>f.startsWith("STOP_HUNT")).length) - (a.manipFlags.filter(f=>f.startsWith("STOP_HUNT")).length));
+  if (sort === "absorp") rows.sort((a,b) => (b.absorption?1:0) - (a.absorption?1:0));
+  if (sort === "exhaust") rows.sort((a,b) => (b.exhaustion?1:0) - (a.exhaustion?1:0));
 
-  $("researchList").innerHTML = rows.map(r => {
-    const brPill = r.buyRatio >= 0.55 ? "on" : r.buyRatio <= 0.45 ? "bear" : "";
-    const dzPill = Math.abs(r.deltaZ) >= 1.5 ? "blue" : "";
-    const struct = r.bosBull ? "BOS↑" : r.bosBear ? "BOS↓" : r.obBull ? "OB↑" : r.obBear ? "OB↓" : "—";
-    const structCls = (r.bosBull || r.obBull) ? "on" : (r.bosBear || r.obBear) ? "bear" : "";
-    const sweepPill = r.sweepLow ? "SWEEP↓" : r.sweepHigh ? "SWEEP↑" : "";
+  $("manipList").innerHTML = rows.map(r => {
+    const flagPills = r.manipFlags.map(f => '<span class="pill danger">' + f.replace("_"," ") + '</span>').join("");
     return '<div class="rrow" data-sym="' + r.symbol + '">' +
       '<div class="rleft">' +
-        '<div><span class="rsym">' + r.symbol.replace("USDT", "") + '</span><span class="rtf">' + r.tf + '</span></div>' +
+        '<div><span class="rsym">' + r.symbol.replace("USDT","") + '</span><span class="rtf">' + r.tf + '</span></div>' +
         '<div class="rprice">' + fmt(r.price) + '</div>' +
+        '<div class="rsub">BR ' + (r.buyRatio*100).toFixed(0) + '% · V' + r.volMult.toFixed(1) + 'x</div>' +
       '</div>' +
       '<div class="rmetrics">' +
-        '<span class="pill ' + (r.score >= CFG.minScore ? "on" : "") + '">S' + r.score + '</span>' +
-        '<span class="pill ' + brPill + '">BR' + (r.buyRatio * 100).toFixed(0) + '%</span>' +
-        '<span class="pill ' + dzPill + '">ΔZ' + r.deltaZ.toFixed(1) + '</span>' +
-        '<span class="pill ' + (r.volMult >= CFG.volMult ? "on" : "") + '">V' + r.volMult.toFixed(1) + 'x</span>' +
-        '<span class="pill ' + structCls + '">' + struct + '</span>' +
-        (sweepPill ? '<span class="pill warn">' + sweepPill + '</span>' : "") +
+        '<span class="pill danger">M' + r.manipScore + '</span>' +
+        flagPills +
       '</div>' +
     '</div>';
   }).join("");
 
-  $("researchList").querySelectorAll(".rrow").forEach(r => {
+  $("manipList").querySelectorAll(".rrow").forEach(r => {
     r.addEventListener("click", () => openChart(r.dataset.sym));
   });
 }
 
-/* ============================================================
+function renderAI() {
+  const el = $("aiPanel");
+  const rows = Object.values(STATE.results).filter(r => r.aiAcc > 0);
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty">AI models training…<br>Models require at least 60 training samples per symbol. Check back after the first scan.</div>';
+    return;
+  }
+  rows.sort((a,b) => b.aiProb - a.aiProb);
+  const avgAcc = rows.reduce((s,r) => s + r.aiAcc, 0) / rows.length;
+
+  let html = '<div class="stats" style="grid-template-columns:repeat(3,1fr)">' +
+    '<div class="stat"><div class="k">MODELS</div><div class="v">' + rows.length + '</div></div>' +
+    '<div class="stat"><div class="k">AVG ACC</div><div class="v" style="color:var(--cyan)">' + avgAcc.toFixed(0) + '%</div></div>' +
+    '<div class="stat"><div class="k">BEST</div><div class="v" style="color:var(--green)">' + Math.max(...rows.map(r=>r.aiAcc)) + '%</div></div>' +
+    '</div>';
+
+  html += rows.slice(0, 20).map(r => {
+    const p = r.aiProb;
+    const cls = p >= 70 ? "on" : p >= 55 ? "warn" : "";
+    return '<div class="rrow" data-sym="' + r.symbol + '">' +
+      '<div class="rleft">' +
+        '<div><span class="rsym">' + r.symbol.replace("USDT","") + '</span><span class="rtf">' + r.tf + '</span></div>' +
+        '<div class="rsub">acc ' + r.aiAcc + '%</div>' +
+      '</div>' +
+      '<div class="rmetrics">' +
+        '<span class="pill ' + cls + '">P(up) ' + p + '%</span>' +
+        '<span class="pill">S' + r.score + '</span>' +
+        '<span class="pill">RSI ' + (isFinite(r.rsi) ? r.rsi.toFixed(0) : "—") + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+
+  el.innerHTML = html;
+  el.querySelectorAll(".rrow").forEach(r => {
+    r.addEventListener("click", () => openChart(r.dataset.sym));
+  });
+}
+
+/* ================================================================
    CHART
-============================================================ */
+   ================================================================ */
 function fillChartSelect() {
   const sel = $("chartSym");
-  const cur = S.chartSym;
-  sel.innerHTML = S.universe.map(u => '<option value="' + u.symbol + '">' + u.base + '</option>').join("");
-  if (cur && S.universe.some(u => u.symbol === cur)) sel.value = cur;
-  else S.chartSym = S.universe.length ? S.universe[0].symbol : null;
-  if (S.chartSym) sel.value = S.chartSym;
+  const cur = STATE.chartSym;
+  sel.innerHTML = STATE.universe.map(u => '<option value="' + u.symbol + '">' + u.base + '</option>').join("");
+  if (cur && STATE.universe.some(u => u.symbol === cur)) sel.value = cur;
+  else STATE.chartSym = STATE.universe.length ? STATE.universe[0].symbol : null;
+  if (STATE.chartSym) sel.value = STATE.chartSym;
 }
 
 function initChart() {
   const container = $("chartContainer");
-  if (S.chart) return;
-  S.chart = LightweightCharts.createChart(container, {
-    layout: { background: { color: "#151a23" }, textColor: "#848e9c" },
-    grid: { vertLines: { color: "#1b212c" }, horzLines: { color: "#1b212c" } },
+  if (!container || STATE.chart) return;
+  STATE.chart = LightweightCharts.createChart(container, {
+    layout: { background: { color: "#12171f" }, textColor: "#7a8698" },
+    grid: { vertLines: { color: "#1a2130" }, horzLines: { color: "#1a2130" } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: "#232936" },
-    timeScale: { borderColor: "#232936", timeVisible: true, secondsVisible: false },
+    rightPriceScale: { borderColor: "#1f2733" },
+    timeScale: { borderColor: "#1f2733", timeVisible: true, secondsVisible: false },
     handleScroll: true, handleScale: true
   });
-  S.candleSeries = S.chart.addCandlestickSeries({
-    upColor: "#0ecb81", downColor: "#f6465d",
-    borderVisible: false,
+  STATE.candleSeries = STATE.chart.addCandlestickSeries({
+    upColor: "#0ecb81", downColor: "#f6465d", borderVisible: false,
     wickUpColor: "#0ecb81", wickDownColor: "#f6465d"
   });
   new ResizeObserver(() => {
-    if (S.chart) {
-      S.chart.applyOptions({
+    if (STATE.chart) {
+      STATE.chart.applyOptions({
         width: container.clientWidth,
         height: container.clientHeight
       });
@@ -1573,29 +1435,37 @@ function initChart() {
 }
 
 async function loadChart() {
-  if (!S.chartSym) { $("chartLegend").textContent = "no pair"; return; }
+  if (!STATE.chartSym) {
+    $("chartLegend").textContent = "no pair";
+    return;
+  }
   $("chartLegend").textContent = "loading…";
   try {
     initChart();
-    const url = CFG.base + "/api/v3/klines?symbol=" + S.chartSym + "&interval=" + S.chartTf + "&limit=" + CFG.klinesLimit;
+    const url = CFG.base + "/api/v3/klines?symbol=" + STATE.chartSym + "&interval=" + STATE.chartTf + "&limit=300";
     const kl = await getJSON(url, 20000);
     const candles = kl.map(k => ({
-      time: Math.floor(+k[0] / 1000),
+      time: Math.floor(+k[0]/1000),
       open: +k[1], high: +k[2], low: +k[3], close: +k[4]
     }));
-    S.candleSeries.setData(candles);
-    S.chart.timeScale().fitContent();
-    const last = +kl[kl.length - 1][4];
-    const prev = +kl[kl.length - 2][4];
-    const ch = (last / prev - 1) * 100;
-    const tbVol = +kl[kl.length - 1][9];
-    const totVol = +kl[kl.length - 1][5];
-    const br = totVol > 0 ? (tbVol / totVol * 100).toFixed(0) : "0";
+    STATE.candleSeries.setData(candles);
+    STATE.chart.timeScale().fitContent();
+
+    const last = +kl[kl.length-1][4];
+    const prev = +kl[kl.length-2][4];
+    const ch = (last/prev - 1) * 100;
+    const tb = +kl[kl.length-1][9];
+    const vol = +kl[kl.length-1][5];
+    const br = vol > 0 ? (tb/vol*100).toFixed(0) : 0;
+    const r = STATE.results[STATE.chartSym];
+
+    let extra = "";
+    if (r) extra = " · AI " + r.aiProb + "% · S" + r.score + " · M" + r.manipScore;
+
     $("chartLegend").innerHTML =
-      '<b>' + S.chartSym + '</b> · ' + S.chartTf + ' · ' + fmt(last) +
-      ' <span class="' + (ch >= 0 ? "up" : "down") + '">' +
-      (ch >= 0 ? "+" : "") + ch.toFixed(2) + '%</span>' +
-      ' · buy ' + br + '%';
+      '<b>' + STATE.chartSym + '</b> · ' + STATE.chartTf + ' · ' + fmt(last) +
+      ' <span style="color:' + (ch >= 0 ? "var(--green)" : "var(--red)") + '">' + fmtPct(ch) + '</span>' +
+      ' · buy ' + br + '%' + extra;
   } catch(e) {
     $("chartLegend").textContent = "chart failed: " + e.message;
     log("chart failed: " + e.message, "fail");
@@ -1603,15 +1473,16 @@ async function loadChart() {
 }
 
 function openChart(sym) {
-  S.chartSym = sym;
-  $("chartSym").value = sym;
+  STATE.chartSym = sym;
+  const sel = $("chartSym");
+  if (sel) sel.value = sym;
   switchTab("chart");
-  setTimeout(loadChart, 50);
+  setTimeout(loadChart, 60);
 }
 
-/* ============================================================
+/* ================================================================
    TABS
-============================================================ */
+   ================================================================ */
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach(t => {
     t.classList.toggle("active", t.id === "tab-" + name);
@@ -1621,40 +1492,16 @@ function switchTab(name) {
   });
   if (name === "chart") setTimeout(() => { initChart(); loadChart(); }, 50);
   if (name === "research") renderResearch();
+  if (name === "manip") renderManip();
+  if (name === "ai") renderAI();
 }
 
-/* ============================================================
+/* ================================================================
    WIRING
-============================================================ */
-document.querySelectorAll("nav button").forEach(b => {
-  b.addEventListener("click", () => switchTab(b.dataset.tab));
-});
-
-$("sigSeg").addEventListener("click", e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  S.sigFilter = b.dataset.f;
-  [].slice.call($("sigSeg").children).forEach(x => x.classList.toggle("on", x === b));
-  renderSignals();
-});
-
-$("sortSel").addEventListener("change", renderResearch);
-
-$("chartSym").addEventListener("change", e => {
-  S.chartSym = e.target.value;
-  loadChart();
-});
-
-$("chartTfs").addEventListener("click", e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  S.chartTf = b.dataset.tf;
-  [].slice.call($("chartTfs").children).forEach(x => x.classList.toggle("on", x === b));
-  loadChart();
-});
-
+   ================================================================ */
 function bindSlider(inp, out, key, decimals) {
   const el = $(inp), outEl = $(out);
+  if (!el) return;
   el.value = CFG[key];
   outEl.textContent = decimals ? CFG[key].toFixed(decimals) : CFG[key];
   el.addEventListener("input", () => {
@@ -1664,32 +1511,105 @@ function bindSlider(inp, out, key, decimals) {
   });
 }
 
-bindSlider("in-score", "v-score", "minScore", 0);
-bindSlider("in-vol", "v-vol", "volMult", 1);
-bindSlider("in-disp", "v-disp", "dispBodyATR", 1);
-bindSlider("in-top", "v-top", "topN", 0);
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("nav button").forEach(b => {
+    b.addEventListener("click", () => switchTab(b.dataset.tab));
+  });
 
-$("btnRefresh").addEventListener("click", () => {
-  S.universe = [];
-  scan();
+  $("sigSeg").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    STATE.sigFilter = b.dataset.f;
+    Array.from($("sigSeg").children).forEach(x => x.classList.toggle("on", x === b));
+    renderSignals();
+  });
+
+  $("sortSel").addEventListener("change", renderResearch);
+  $("manipSort").addEventListener("change", renderManip);
+
+  $("chartSym").addEventListener("change", e => {
+    STATE.chartSym = e.target.value;
+    loadChart();
+  });
+
+  $("chartTfs").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    STATE.chartTf = b.dataset.tf;
+    Array.from($("chartTfs").children).forEach(x => x.classList.toggle("on", x === b));
+    loadChart();
+  });
+
+  $("tfSeg").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const tf = b.dataset.tf;
+    const idx = CFG.scanTfs.indexOf(tf);
+    if (idx >= 0) CFG.scanTfs.splice(idx, 1);
+    else CFG.scanTfs.push(tf);
+    if (!CFG.scanTfs.length) CFG.scanTfs.push("1h");
+    b.classList.toggle("on");
+    saveCfg();
+  });
+
+  bindSlider("in-prob", "v-prob", "minProb", 0);
+  bindSlider("in-score", "v-score", "minScore", 0);
+  bindSlider("in-vol", "v-vol", "volMult", 1);
+  bindSlider("in-top", "v-top", "topN", 0);
+
+  $("btnRefresh").addEventListener("click", () => {
+    STATE.universe = [];
+    STATE.results = {};
+    STATE.aiModels = {};
+    scan();
+  });
+
+  $("btnTest").addEventListener("click", connectionTest);
+
+  // init scan tf buttons
+  Array.from($("tfSeg").children).forEach(b => {
+    b.classList.toggle("on", CFG.scanTfs.includes(b.dataset.tf));
+  });
+
+  // boot
+  (async function boot() {
+    log("boot start", "info");
+    try {
+      await loadUniverse();
+      initChart();
+      await scan();
+    } catch(e) {
+      $("status").className = "err";
+      $("status").textContent = "boot failed: " + e.message;
+      log("boot failed: " + e.message, "fail");
+    }
+    setInterval(scan, CFG.refreshMs);
+  })();
 });
 
-/* ============================================================
-   BOOT
-============================================================ */
-(async function boot() {
-  log("boot start", "info");
-  try {
-    await loadUniverse();
-    initChart();
-    await scan();
-  } catch(e) {
-    $("status").className = "err";
-    $("status").textContent = "boot failed: " + e.message;
-    log("boot failed: " + e.message, "fail");
+async function connectionTest() {
+  $("debug").innerHTML = "";
+  log("testing Binance market-data endpoints…", "info");
+  const sym = "BTCUSDT";
+  const endpoints = [
+    { name: "klines",    url: CFG.base + "/api/v3/klines?symbol=" + sym + "&interval=1h&limit=5" },
+    { name: "ticker24h", url: CFG.base + "/api/v3/ticker/24hr?symbol=" + sym },
+    { name: "depth",     url: CFG.base + "/api/v3/depth?symbol=" + sym + "&limit=10" },
+    { name: "aggTrades", url: CFG.base + "/api/v3/aggTrades?symbol=" + sym + "&limit=5" }
+  ];
+  for (const ep of endpoints) {
+    try {
+      const r = await fetch(ep.url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      const size = Array.isArray(d) ? d.length : Object.keys(d).length;
+      log(ep.name + ": OK (" + size + " rows)", "ok");
+    } catch(e) {
+      log(ep.name + ": FAILED — " + e.message + " (CORS or network)", "fail");
+    }
   }
-  setInterval(scan, CFG.refreshMs);
-})();
+  log("klines and ticker24h are used by the engine. depth/aggTrades failing is expected in a browser — the engine compensates using kline field 9 (taker buy volume).", "warn");
+}
 </script>
 </body>
 </html>
