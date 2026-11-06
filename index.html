@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0e14">
-<title>Microstructure Terminal</title>
+<title>Microstructure Debug</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#0b0e14;--card:#151a23;--line:#232936;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--text:#eaecef;--muted:#848e9c}
@@ -66,6 +67,8 @@ select{background:#1e2329;color:var(--text);border:1px solid var(--line);border-
 input[type=range]{width:100%;accent-color:#0ecb81;height:26px}
 .bigbtn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#04170f;font-weight:700;font-size:14px;margin-top:6px}
 .fineprint{font-size:10px;color:#5d6675;line-height:1.5;margin-top:14px}
+#debug{background:#1a0f0f;border:1px solid #3a1f1f;border-radius:10px;padding:12px;margin-top:14px;font-family:monospace;font-size:10px;line-height:1.6;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+#debug .ok{color:var(--green)}#debug .fail{color:var(--red)}#debug .warn{color:var(--amber)}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0f131b;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
 nav button{flex:1;padding:14px 4px;background:none;border:none;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.3px}
 nav button.on{color:var(--green)}
@@ -117,12 +120,14 @@ nav button.on{color:var(--green)}
   </section>
 
   <section id="tab-setup" class="tab">
-    <div class="setblock"><label>Min score <b id="v-score">55</b></label><input type="range" id="in-score" min="30" max="95" step="1"></div>
-    <div class="setblock"><label>OBI threshold <b id="v-obi">0.65</b></label><input type="range" id="in-obi" min="0.5" max="0.95" step="0.01"></div>
-    <div class="setblock"><label>CVD Z-Score <b id="v-cvd">2.0</b></label><input type="range" id="in-cvd" min="1" max="5" step="0.1"></div>
-    <div class="setblock"><label>Universe size <b id="v-top">50</b></label><input type="range" id="in-top" min="20" max="100" step="10"></div>
+    <div class="setblock"><label>Min score <b id="v-score">45</b></label><input type="range" id="in-score" min="20" max="95" step="1"></div>
+    <div class="setblock"><label>OBI threshold <b id="v-obi">0.55</b></label><input type="range" id="in-obi" min="0.3" max="0.95" step="0.01"></div>
+    <div class="setblock"><label>CVD threshold <b id="v-cvd">1.0</b></label><input type="range" id="in-cvd" min="0.5" max="5" step="0.1"></div>
+    <div class="setblock"><label>Universe size <b id="v-top">30</b></label><input type="range" id="in-top" min="10" max="100" step="5"></div>
     <button id="btnRefresh" class="bigbtn">Rescan now</button>
-    <p class="fineprint">Engine: Order Book Imbalance (OBI) from live depth, Cumulative Volume Delta (CVD) from aggTrades, VPIN toxicity proxy, Wyckoff narrowing-range detection, and displacement. Data: Binance public REST.</p>
+    <button id="btnTest" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;font-size:13px;margin-top:8px">Run connection test</button>
+    <p class="fineprint">If the connection test fails, your network or browser is blocking Binance. The debug panel below will show the exact error.</p>
+    <div id="debug">waiting for test…</div>
   </section>
 </main>
 
@@ -135,22 +140,32 @@ nav button.on{color:var(--green)}
 
 <script>
 /* ---------------- config ---------------- */
-const DEFAULTS={topN:50,minScore:55,obiThresh:0.65,cvdZThresh:2.0,
+const DEFAULTS={topN:30,minScore:45,obiThresh:0.55,cvdThresh:1.0,
   atrLen:14,volLookback:20,swingLookback:2,
   scanTfs:["1h"],refreshMs:180000,klinesLimit:200,
-  base:"https://api.binance.com"};
+  base:"https://data-api.binance.vision"}; // fallback-friendly domain
 let CFG=Object.assign({},DEFAULTS);
-try{Object.assign(CFG,JSON.parse(localStorage.getItem('micro_cfg')||'{}'))}catch(e){}
-function saveCfg(){try{localStorage.setItem('micro_cfg',JSON.stringify({topN:CFG.topN,minScore:CFG.minScore,
-  obiThresh:CFG.obiThresh,cvdZThresh:CFG.cvdZThresh}))}catch(e){}}
+try{Object.assign(CFG,JSON.parse(localStorage.getItem('micro_dbg')||'{}'))}catch(e){}
+function saveCfg(){try{localStorage.setItem('micro_dbg',JSON.stringify({topN:CFG.topN,minScore:CFG.minScore,
+  obiThresh:CFG.obiThresh,cvdThresh:CFG.cvdThresh}))}catch(e){}}
 
 const S={universe:[],lastUniverse:0,metrics:{},signals:[],chartSym:null,chartTf:'1h',
-  scanDone:0,scanTotal:0,scanning:false,sigFilter:'all',chart:null,candleSeries:null};
+  scanDone:0,scanTotal:0,scanning:false,sigFilter:'all',chart:null,candleSeries:null,
+  lastErrors:[]};
 
 const $=id=>document.getElementById(id);
 const fmt=n=>{if(!isFinite(n))return '-';const a=Math.abs(n);
   if(a>=1000)return n.toLocaleString(undefined,{maximumFractionDigits:1});
   if(a>=1)return n.toFixed(3); if(a>=0.01)return n.toFixed(4); return n.toPrecision(4);};
+
+function logDebug(msg,type='ok'){
+  const el=$('debug');
+  const line=document.createElement('div');
+  line.className=type;
+  line.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop=el.scrollHeight;
+}
 
 /* ---------------- data ---------------- */
 const cache=new Map();
@@ -158,7 +173,7 @@ async function getJSON(url,ttl){
   const now=Date.now(), hit=cache.get(url);
   if(hit&&now-hit.ts<ttl) return hit.data;
   const r=await fetch(url);
-  if(!r.ok) throw new Error(r.status);
+  if(!r.ok) throw new Error('HTTP '+r.status+' — '+url.slice(0,80));
   const d=await r.json();
   cache.set(url,{ts:now,data:d});
   return d;
@@ -213,43 +228,38 @@ function findSwings(h,l,n){
   return {sh,sl};
 }
 
-/* ---------------- ORDER FLOW HELPERS ---------------- */
+/* ---------------- ORDER FLOW ---------------- */
 async function fetchDepth(symbol,limit=100){
   const data=await getJSON(`${CFG.base}/api/v3/depth?symbol=${symbol}&limit=${limit}`,10000);
   return data;
 }
-
 function calcOBI(depth){
   const bids=depth.bids||[], asks=depth.asks||[];
   let bidVol=0, askVol=0;
   for(const b of bids) bidVol+=parseFloat(b[1]);
   for(const a of asks) askVol+=parseFloat(a[1]);
   const total=bidVol+askVol;
-  return total>0 ? (bidVol/total)*2-1 : 0; // -1 to +1
+  return total>0 ? (bidVol/total)*2-1 : 0;
 }
-
 async function fetchAggTrades(symbol,limit=500){
   const data=await getJSON(`${CFG.base}/api/v3/aggTrades?symbol=${symbol}&limit=${limit}`,15000);
   return data;
 }
-
 function calcCVD(trades){
   let buyVol=0,sellVol=0;
   for(const t of trades){
     const qty=parseFloat(t.q);
-    if(t.m===false) buyVol+=qty; // buyer is taker -> buy pressure
+    if(t.m===false) buyVol+=qty;
     else sellVol+=qty;
   }
   return {buyVol,sellVol,delta:buyVol-sellVol,total:buyVol+sellVol};
 }
-
 function calcVPIN(trades){
-  // VPIN proxy: |buyVol - sellVol| / totalVol over the batch
   const {buyVol,sellVol,total}=calcCVD(trades);
   return total>0 ? Math.abs(buyVol-sellVol)/total : 0;
 }
 
-/* ---------------- ADVANCED ENGINE ---------------- */
+/* ---------------- ENGINE ---------------- */
 async function analyze(symbol,tf,kl){
   const n=kl.length; if(n<100) return null;
   const o=kl.map(k=>+k[1]),h=kl.map(k=>+k[2]),l=kl.map(k=>+k[3]),c=kl.map(k=>+k[4]),v=kl.map(k=>+k[5]);
@@ -257,15 +267,21 @@ async function analyze(symbol,tf,kl){
   const atr=atrSeries(h,l,c,CFG.atrLen), A=atr[last];
   if(!isFinite(A)||A<=0) return null;
 
-  // --- microstructure data ---
-  const [depth,trades]=await Promise.all([
-    fetchDepth(symbol,100),
-    fetchAggTrades(symbol,500)
-  ]);
+  let depth,trades;
+  try{
+    [depth,trades]=await Promise.all([
+      fetchDepth(symbol,100),
+      fetchAggTrades(symbol,500)
+    ]);
+  }catch(e){
+    S.lastErrors.push(`${symbol}: ${e.message}`);
+    logDebug(`${symbol} microstructure fetch failed: ${e.message}`,'fail');
+    return {symbol,tf,price:c[last],error:e.message,score:0,tags:[],sig:null};
+  }
+
   const obi=calcOBI(depth);
   const cvd=calcCVD(trades);
   const vpin=calcVPIN(trades);
-  const cvdZ=(()=>{const vals=[];for(let i=Math.max(0,last-20);i<=last;i++)vals.push(v[i]);return vals.length? (cvd.delta - sma(vals,vals.length-1,vals.length))/stddev(vals,vals.length-1,vals.length):0})();
 
   const volBase=sma(v,last-1,CFG.volLookback);
   const volMult=volBase>0?v[last]/volBase:0;
@@ -279,30 +295,26 @@ async function analyze(symbol,tf,kl){
   const bosBull=!!(lSH&&c[last]>lSH.p&&c[last-1]<=lSH.p);
   const bosBear=!!(lSL&&c[last]<lSL.p&&c[last-1]>=lSL.p);
 
-  // Wyckoff narrowing range
   const ranges=[];
   for(let i=Math.max(0,last-20);i<=last;i++) ranges.push(h[i]-l[i]);
   const firstAvg=ranges.slice(0,10).reduce((a,b)=>a+b,0)/10;
   const lastAvg=ranges.slice(-10).reduce((a,b)=>a+b,0)/10;
   const narrowing=firstAvg>0&&lastAvg/firstAvg<0.65;
 
-  // HTF bias
   const ref50=c[Math.max(0,last-50)];
   const htfBull=c[last]>ref50&&sma(c,last,20)>sma(c,last-1,20);
   const htfBear=c[last]<ref50&&sma(c,last,20)<sma(c,last-1,20);
 
-  // Kill zone
   const hr=new Date().getUTCHours();
   const killZone=(hr>=7&&hr<=10)||(hr>=12&&hr<=15);
 
-  // --- SCORING ---
   let score=0; const tags=[];
   const add=(cond,pts,label,cls)=>{ if(cond){score+=pts;tags.push([label,1,cls||'on']);}else tags.push([label,0,'']); };
 
   add(volMult>=2.0, 10, 'VOL', 'on');
   add(Math.abs(obi)>=CFG.obiThresh, 18, 'OBI', 'gold');
-  add(Math.abs(cvdZ)>=CFG.cvdZThresh, 15, 'CVD', 'blue');
-  add(vpin>=0.5, 8, 'VPIN', 'gold');
+  add(Math.abs(cvd.delta)>=CFG.cvdThresh, 15, 'CVD', 'blue');
+  add(vpin>=0.4, 8, 'VPIN', 'gold');
   add(narrowing, 8, 'WYK', 'gold');
   add(htfBull||htfBear, 8, 'HTF', 'on');
   add(killZone, 4, 'KZ', 'on');
@@ -315,7 +327,6 @@ async function analyze(symbol,tf,kl){
 
   if(score<CFG.minScore) return base;
 
-  // --- DIRECTION ---
   let bull=0,bear=0;
   if(obi>0)bull+=3; if(obi<0)bear+=3;
   if(cvd.delta>0)bull+=2; if(cvd.delta<0)bear+=2;
@@ -337,12 +348,39 @@ async function analyze(symbol,tf,kl){
   return base;
 }
 
+/* ---------------- connection test ---------------- */
+async function connectionTest(){
+  $('debug').innerHTML='';
+  const sym='BTCUSDT';
+  logDebug('Testing Binance market data reachability…','warn');
+
+  const endpoints=[
+    {name:'klines',url:`${CFG.base}/api/v3/klines?symbol=${sym}&interval=1h&limit=5`},
+    {name:'depth',url:`${CFG.base}/api/v3/depth?symbol=${sym}&limit=10`},
+    {name:'aggTrades',url:`${CFG.base}/api/v3/aggTrades?symbol=${sym}&limit=5`}
+  ];
+
+  for(const ep of endpoints){
+    try{
+      const r=await fetch(ep.url);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const d=await r.json();
+      const size=Array.isArray(d)?d.length:Object.keys(d).length;
+      logDebug(`${ep.name}: OK (${size} rows)`,'ok');
+    }catch(e){
+      logDebug(`${ep.name}: FAILED — ${e.message}. This is a CORS or network block.`,'fail');
+    }
+  }
+
+  logDebug('If depth or aggTrades failed, the signal engine cannot use order-flow data. Use a CORS proxy or run a tiny local proxy.','warn');
+}
+
 /* ---------------- scan ---------------- */
 function setProgress(p){ $('progress').firstElementChild.style.width=(p*100).toFixed(1)+'%'; }
 
 async function scan(){
   if(S.scanning) return;
-  S.scanning=true;
+  S.scanning=true; S.lastErrors=[];
   try{
     if(!S.universe.length||Date.now()-S.lastUniverse>600000) await loadUniverse();
     const jobs=[];
@@ -356,11 +394,12 @@ async function scan(){
       S.scanDone++;
       if(S.scanDone%5===0){ setProgress(S.scanDone/S.scanTotal); $('status').textContent=`scanning ${S.scanDone}/${S.scanTotal}`; }
       return r;
-    },5);
+    },3);
 
     const best={},sigMap={};
     for(const r of res){
       if(!r) continue;
+      if(r.error) continue;
       if(!best[r.symbol]||r.score>best[r.symbol].score) best[r.symbol]=r;
       if(r.sig){
         const cur=sigMap[r.symbol];
@@ -373,8 +412,10 @@ async function scan(){
     renderSignals(); renderResearch();
     const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     $('status').textContent=`${S.signals.length} signals · ${Object.keys(best).length} pairs · ${t}`;
+    if(S.lastErrors.length) logDebug(`Scan completed with ${S.lastErrors.length} fetch errors. First: ${S.lastErrors[0]}`,'fail');
   }catch(e){
     $('status').className='err'; $('status').textContent='scan failed: '+e.message;
+    logDebug('Scan failed: '+e.message,'fail');
   }finally{ S.scanning=false; }
 }
 
@@ -383,7 +424,7 @@ function renderSignals(){
   const f=S.sigFilter;
   const list=S.signals.filter(s=>f==='all'||s.dir===f);
   const el=$('feed');
-  if(!list.length){ el.innerHTML='<div class="empty">No qualifying setups right now.</div>'; return; }
+  if(!list.length){ el.innerHTML='<div class="empty">No qualifying setups. Run the connection test in Setup to verify data access.</div>'; return; }
   el.innerHTML=list.map(s=>{
     const cls=s.dir==='BULLISH'?'bullish':'bearish';
     const sc=s.score>=75?'high':'mid';
@@ -423,8 +464,8 @@ function renderResearch(){
       </div>
       <div class="rmetrics">
         <span class="pill ${Math.abs(r.obi)>=CFG.obiThresh?'on':''}">OBI ${r.obi.toFixed(2)}</span>
-        <span class="pill ${Math.abs(r.cvd)>=CFG.cvdZThresh?'blue':''}">Δ ${r.cvd.toFixed(0)}</span>
-        <span class="pill ${r.vpin>=0.5?'on':''}">V ${r.vpin.toFixed(2)}</span>
+        <span class="pill ${Math.abs(r.cvd)>=CFG.cvdThresh?'blue':''}">Δ ${r.cvd.toFixed(0)}</span>
+        <span class="pill ${r.vpin>=0.4?'on':''}">V ${r.vpin.toFixed(2)}</span>
         <span class="pill ${r.bosBull||r.bosBear?'on':''}">${struct}</span>
         <span class="pill ${r.narrowing?'on':''}">${r.narrowing?'WYK':'—'}</span>
       </div>
@@ -479,7 +520,7 @@ async function loadChart(){
     const last=+kl[kl.length-1][4], prev=+kl[kl.length-2][4];
     const ch=(last/prev-1)*100;
     $('chartLegend').innerHTML=`<b>${S.chartSym}</b> · ${S.chartTf} · ${fmt(last)} <span class="${ch>=0?'up':'down'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
-  }catch(e){ $('chartLegend').textContent='chart load failed'; }
+  }catch(e){ $('chartLegend').textContent='chart load failed: '+e.message; }
 }
 
 function openChart(sym){
@@ -517,7 +558,7 @@ $('chartTfs').addEventListener('click',e=>{
   loadChart();
 });
 
-const bind=(inp,out,key,scale,step)=>{
+const bind=(inp,out,key,step)=>{
   const el=$(inp), outEl=$(out);
   el.value=CFG[key];
   outEl.textContent=step===0.01?CFG[key].toFixed(2):CFG[key];
@@ -529,10 +570,11 @@ const bind=(inp,out,key,scale,step)=>{
 };
 bind('in-score','v-score','minScore');
 bind('in-obi','v-obi','obiThresh',0.01);
-bind('in-cvd','v-cvd','cvdZThresh',0.1);
+bind('in-cvd','v-cvd','cvdThresh',0.1);
 bind('in-top','v-top','topN');
 
 $('btnRefresh').addEventListener('click',()=>{ S.universe=[]; scan(); });
+$('btnTest').addEventListener('click',connectionTest);
 
 /* ---------------- boot ---------------- */
 (async function boot(){
@@ -543,6 +585,7 @@ $('btnRefresh').addEventListener('click',()=>{ S.universe=[]; scan(); });
   }catch(e){
     $('status').className='err';
     $('status').textContent='boot failed: '+e.message;
+    logDebug('Boot failed: '+e.message,'fail');
   }
   setInterval(scan,CFG.refreshMs);
 })();
