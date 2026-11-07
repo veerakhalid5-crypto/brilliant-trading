@@ -2,163 +2,201 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Core Engine</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Institutional IQ</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#080a0f;--card:#12171f;--card2:#171d27;--line:#1f2733;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--cyan:#06b6d4;--purple:#a855f7;--text:#e8ecf1;--muted:#7a8698;--dim:#4b5563}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--text);padding:16px;font-size:13px;line-height:1.5}
-h1{font-size:16px;letter-spacing:2px;color:var(--text);font-weight:800;margin-bottom:4px}
-h1 span{color:var(--cyan)}
-h2{font-size:13px;color:var(--cyan);margin:18px 0 8px;letter-spacing:1px;font-weight:700}
-.sub{color:var(--muted);font-size:11px;margin-bottom:16px}
-.panel{background:var(--card);border-radius:12px;padding:14px;margin-bottom:14px;border:1px solid var(--line)}
+body{background:var(--bg);color:var(--text);padding-bottom:calc(72px + env(safe-area-inset-bottom));font-size:13px;line-height:1.5}
+header{position:sticky;top:0;z-index:20;background:rgba(8,10,15,.95);backdrop-filter:blur(12px);padding:11px 12px 7px;border-bottom:1px solid var(--line)}
+h1{font-size:14px;letter-spacing:2px;font-weight:800}h1 span{color:var(--cyan)}
+#status{font-size:10px;color:var(--muted);text-align:right;max-width:60%}
+#status.err{color:var(--red)}#status.ok{color:var(--green)}
+main{padding:12px;max-width:1400px;margin:0 auto}
+.tab{display:none}.tab.active{display:block}
+.card{background:var(--card);border-radius:12px;padding:13px;border-left:4px solid var(--dim);margin-bottom:10px}
+.card.long{border-left-color:var(--green)}.card.short{border-left-color:var(--red)}.card.neutral{border-left-color:var(--amber)}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px}
+.sym{font-size:17px;font-weight:800}.tf{font-size:10px;color:var(--muted);background:var(--card2);padding:2px 6px;border-radius:4px;font-weight:600;margin-left:6px}
+.badge{font-size:13px;padding:4px 9px;border-radius:7px;background:var(--card2);font-weight:800}
+.badge.high{color:var(--green);box-shadow:0 0 0 1px rgba(14,203,129,.3)}
+.badge.mid{color:var(--amber);box-shadow:0 0 0 1px rgba(240,185,11,.25)}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center;margin:8px 0}
+.lb{background:var(--card2);padding:7px 3px;border-radius:7px}
+.ll{color:var(--muted);font-size:9px;display:block;margin-bottom:3px;font-weight:600}
+.lv{font-weight:800;font-size:12px}
+.tagrow{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.tag{font-size:9.5px;padding:2px 6px;border-radius:4px;background:var(--card2);color:var(--dim);font-weight:600}
+.tag.on{background:rgba(14,203,129,.14);color:var(--green)}
+.tag.warn{background:rgba(240,185,11,.14);color:var(--amber)}
+.tag.danger{background:rgba(168,85,247,.16);color:var(--purple)}
+.evidence{font-size:10.5px;color:var(--muted);line-height:1.6;font-family:ui-monospace,Menlo,monospace;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.empty{color:var(--muted);font-size:13px;padding:32px 16px;text-align:center;line-height:1.7;background:var(--card);border-radius:12px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--card);padding:11px;border-radius:10px}
+.stat .k{font-size:9.5px;color:var(--muted);letter-spacing:.5px;font-weight:700;margin-bottom:4px}
+.stat .v{font-size:17px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .btn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#021a10;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.5px;margin-bottom:8px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-alt{background:transparent;border:1px solid var(--line);color:var(--text)}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.stat{background:var(--card2);padding:10px;border-radius:8px}
-.stat .k{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.5px;margin-bottom:4px}
-.stat .v{font-size:15px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
-.pass{color:var(--green)}.fail{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--muted)}.cyan{color:var(--cyan)}
-pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.6}
-#log{background:#05070b;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:400px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.verdict{padding:14px;border-radius:10px;margin-top:12px;font-weight:700;text-align:center;font-size:14px}
+.btn-sm{padding:9px;font-size:12px;margin-bottom:6px}
+select,input{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;font-size:13px;width:100%;font-weight:600;margin-bottom:8px}
+label{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.5px;margin-bottom:4px;display:block}
+.verdict{padding:14px;border-radius:10px;margin:10px 0;font-weight:700;text-align:center;font-size:14px}
 .verdict.good{background:rgba(14,203,129,.15);color:var(--green);border:1px solid rgba(14,203,129,.3)}
 .verdict.mid{background:rgba(240,185,11,.15);color:var(--amber);border:1px solid rgba(240,185,11,.3)}
 .verdict.bad{background:rgba(246,70,93,.15);color:var(--red);border:1px solid rgba(246,70,93,.3)}
 .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:11px}
 .row:last-child{border-bottom:none}
-.row .lbl{color:var(--muted)}
-.row .val{font-family:ui-monospace,Menlo,monospace;font-weight:700}
+.row .lbl{color:var(--muted)}.row .val{font-family:ui-monospace,Menlo,monospace;font-weight:700}
+.pass{color:var(--green)}.fail{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--muted)}.cyan{color:var(--cyan)}
+#log{background:#05070b;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:300px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--muted)}
+#log .ok{color:var(--green)}#log .err{color:var(--red)}#log .warn{color:var(--amber)}#log .info{color:var(--blue)}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(13,17,23,.97);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:30}
+nav button{flex:1;padding:13px 2px 14px;background:none;border:none;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer}
+nav button.on{color:var(--green)}
+#chartContainer{height:50vh;min-height:280px;background:var(--card);border-radius:12px;overflow:hidden}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,1fr)}.grid2{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:repeat(3,1fr)}.grid4{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
 
-<h1>AI CORE<span>·ENGINE</span></h1>
-<div class="sub">Ensemble ML · Triple-Barrier Labels · Walk-Forward Validation · Honest Reporting</div>
+<header><h1>INSTITUTIONAL<span>·IQ</span></h1><div id="status">booting…</div></header>
 
-<div class="panel">
-  <button class="btn" id="btnTest" onclick="runSelfTest()">Run Self-Test on BTC/USDT</button>
-  <button class="btn btn-alt" id="btnTestEth" onclick="runSelfTest('ETHUSDT')">Run on ETH/USDT</button>
-  <button class="btn btn-alt" id="btnTestSol" onclick="runSelfTest('SOLUSDT')">Run on SOL/USDT</button>
-</div>
+<main>
+<section id="tab-signals" class="tab active">
+  <div class="stats" id="sigStats"></div>
+  <div class="grid2" style="margin-bottom:10px">
+    <select id="sigSymbols">
+      <option value="BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,ADAUSDT">BTC · ETH · SOL · XRP · ADA</option>
+      <option value="BTCUSDT,ETHUSDT,SOLUSDT">BTC · ETH · SOL</option>
+      <option value="BTCUSDT">BTC only</option>
+    </select>
+    <select id="sigTFs">
+      <option value="1h,4h">1h · 4h</option>
+      <option value="15m,1h">15m · 1h</option>
+      <option value="4h,1d">4h · 1d</option>
+    </select>
+  </div>
+  <button class="btn" id="btnScan" onclick="scanSignals()">Scan Now</button>
+  <div id="sigFeed"><div class="empty">Tap Scan Now to find signals.</div></div>
+</section>
 
-<div id="results"></div>
+<section id="tab-backtest" class="tab">
+  <div class="grid2" style="margin-bottom:10px">
+    <select id="btSymbol">
+      <option value="BTCUSDT">BTCUSDT</option>
+      <option value="ETHUSDT">ETHUSDT</option>
+      <option value="SOLUSDT">SOLUSDT</option>
+      <option value="XRPUSDT">XRPUSDT</option>
+      <option value="ADAUSDT">ADAUSDT</option>
+    </select>
+    <select id="btTF">
+      <option value="1h">1h</option>
+      <option value="4h">4h</option>
+      <option value="15m">15m</option>
+      <option value="1d">1d</option>
+    </select>
+  </div>
+  <button class="btn" id="btnBacktest" onclick="runBacktest()">Run Backtest (1000 bars)</button>
+  <div id="btResults"><div class="empty">Run a backtest to see honest historical performance.</div></div>
+</section>
 
-<h2>EXECUTION LOG</h2>
-<div id="log">ready</div>
+<section id="tab-config" class="tab">
+  <div class="card">
+    <label>Min AI probability <span id="v-minProb" style="color:var(--cyan)">55%</span></label>
+    <input type="range" id="cfg-minProb" min="45" max="90" step="1" value="55" oninput="updateCfg()">
+    
+    <label>Min confluence score <span id="v-minScore" style="color:var(--cyan)">40</span></label>
+    <input type="range" id="cfg-minScore" min="20" max="90" step="1" value="40" oninput="updateCfg()">
+    
+    <label>Min structure confirmations <span id="v-minStruct" style="color:var(--cyan)">2</span></label>
+    <input type="range" id="cfg-minStruct" min="1" max="5" step="1" value="2" oninput="updateCfg()">
+    
+    <label>Min R:R <span id="v-minRR" style="color:var(--cyan)">1.5</span></label>
+    <input type="range" id="cfg-minRR" min="1" max="4" step="0.1" value="1.5" oninput="updateCfg()">
+    
+    <label>Max hold bars (backtest) <span id="v-maxHold" style="color:var(--cyan)">24</span></label>
+    <input type="range" id="cfg-maxHold" min="6" max="72" step="2" value="24" oninput="updateCfg()">
+  </div>
+  <div class="card">
+    <h3 style="font-size:13px;margin-bottom:8px;color:var(--cyan)">DIAGNOSTICS</h3>
+    <button class="btn btn-alt btn-sm" onclick="testAPI()">Test Binance API</button>
+    <div id="log">ready</div>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-tab="signals" class="on">Signals</button>
+  <button data-tab="backtest">Backtest</button>
+  <button data-tab="config">Config</button>
+</nav>
 
 <script>
 'use strict';
 
 /* ================================================================
-   AI CORE ENGINE
-   Modular implementation. Each component testable in isolation.
-   No dependencies. Runs in any browser.
+   CONFIG
    ================================================================ */
-
-/* ================================================================
-   SECTION 1: LOGGING
-   ================================================================ */
-const Log = {
-  el: null,
-  init() { this.el = document.getElementById('log'); },
-  clear() { if (this.el) this.el.innerHTML = ''; },
-  write(msg, cls) {
-    if (!this.el) return;
-    const line = document.createElement('div');
-    if (cls) line.style.color = cls === 'pass' ? 'var(--green)'
-                                 : cls === 'fail' ? 'var(--red)'
-                                 : cls === 'warn' ? 'var(--amber)'
-                                 : cls === 'info' ? 'var(--muted)'
-                                 : 'var(--text)';
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    this.el.appendChild(line);
-    this.el.scrollTop = this.el.scrollHeight;
-  },
-  section(title) {
-    this.write('─'.repeat(50));
-    this.write('▸ ' + title);
-    this.write('─'.repeat(50));
-  }
-};
-
-/* ================================================================
-   SECTION 2: DATA LAYER
-   Fetches klines from Binance public REST (CORS-safe).
-   Validates data integrity before returning.
-   ================================================================ */
-const DataLayer = {
+const CFG = {
   BASE: 'https://data-api.binance.vision',
-
-  async fetchKlines(symbol, interval, limit) {
-    const url = `${this.BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status} for ${symbol} ${interval}`);
-    const raw = await r.json();
-    if (!Array.isArray(raw) || raw.length < 100) {
-      throw new Error(`Insufficient data: ${raw.length} bars`);
-    }
-    return this.normalize(raw);
-  },
-
-  normalize(raw) {
-    return raw.map(k => ({
-      time: +k[0],
-      open: +k[1],
-      high: +k[2],
-      low: +k[3],
-      close: +k[4],
-      volume: +k[5],
-      takerBuy: +k[9],
-      trades: +k[8]
-    }));
-  },
-
-  validate(klines) {
-    const issues = [];
-    if (klines.length < 200) issues.push(`Only ${klines.length} bars (need ≥200)`);
-    let gaps = 0;
-    for (let i = 1; i < klines.length; i++) {
-      if (klines[i].time <= klines[i - 1].time) gaps++;
-    }
-    if (gaps > 0) issues.push(`${gaps} time gaps detected`);
-    for (let i = 0; i < klines.length; i++) {
-      const k = klines[i];
-      if (k.high < k.low) issues.push(`Bar ${i}: high < low`);
-      if (k.close <= 0 || k.volume < 0) issues.push(`Bar ${i}: invalid price/volume`);
-    }
-    return { valid: issues.length === 0, issues };
-  }
+  minProb: 0.55,
+  minScore: 40,
+  minStruct: 2,
+  minRR: 1.5,
+  maxHold: 24,
+  trainSplit: 0.7
 };
 
+function updateCfg() {
+  CFG.minProb = +document.getElementById('cfg-minProb').value / 100;
+  CFG.minScore = +document.getElementById('cfg-minScore').value;
+  CFG.minStruct = +document.getElementById('cfg-minStruct').value;
+  CFG.minRR = +document.getElementById('cfg-minRR').value;
+  CFG.maxHold = +document.getElementById('cfg-maxHold').value;
+  document.getElementById('v-minProb').textContent = (CFG.minProb * 100).toFixed(0) + '%';
+  document.getElementById('v-minScore').textContent = CFG.minScore;
+  document.getElementById('v-minStruct').textContent = CFG.minStruct;
+  document.getElementById('v-minRR').textContent = CFG.minRR.toFixed(1);
+  document.getElementById('v-maxHold').textContent = CFG.maxHold;
+}
+
 /* ================================================================
-   SECTION 3: MATH UTILITIES
-   Pure functions. No state. Every one is testable.
+   LOG
+   ================================================================ */
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  if (!el) return;
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ================================================================
+   MATH UTILITIES
    ================================================================ */
 const MathUtil = {
-  mean(arr) { return arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0; },
-  std(arr) {
-    if (arr.length < 2) return 0;
-    const m = this.mean(arr);
-    return Math.sqrt(arr.reduce((s, x) => s + (x - m) ** 2, 0) / arr.length);
-  },
-  sum(arr) { return arr.reduce((s, x) => s + x, 0); },
-  clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); },
-
-  atr(klines, idx, period = 14) {
+  mean: a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0,
+  std: a => { if (a.length < 2) return 0; const m = MathUtil.mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length); },
+  sum: a => a.reduce((s, x) => s + x, 0),
+  atr: (klines, idx, period = 14) => {
     let s = 0, cnt = 0;
-    const start = Math.max(1, idx - period + 1);
-    for (let i = start; i <= idx; i++) {
-      const h = klines[i].high, l = klines[i].low, pc = klines[i - 1].close;
-      s += Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+    for (let i = Math.max(1, idx - period + 1); i <= idx; i++) {
+      s += Math.max(klines[i].high - klines[i].low,
+                    Math.abs(klines[i].high - klines[i - 1].close),
+                    Math.abs(klines[i].low - klines[i - 1].close));
       cnt++;
     }
     return cnt > 0 ? s / cnt : 1;
   },
-
-  swingPoints(klines, idx, n = 2) {
+  swings: (klines, idx, n = 2) => {
     const highs = [], lows = [];
     for (let i = n; i < idx - n; i++) {
       let isH = true, isL = true;
@@ -174,9 +212,21 @@ const MathUtil = {
 };
 
 /* ================================================================
-   SECTION 4: FEATURE ENGINEERING
-   Extracts 24 features from market data at index i.
-   Only uses data at or before i. No look-ahead.
+   DATA LAYER
+   ================================================================ */
+async function fetchKlines(symbol, interval, limit = 1000) {
+  const url = `${CFG.BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const raw = await r.json();
+  return raw.map(k => ({
+    time: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+    volume: +k[5], takerBuy: +k[9], trades: +k[8]
+  }));
+}
+
+/* ================================================================
+   FEATURES (unchanged from working AI Core)
    ================================================================ */
 const Features = {
   extract(klines, i) {
@@ -185,46 +235,35 @@ const Features = {
     const atr = MathUtil.atr(klines, i, 14);
     if (atr <= 0) return null;
 
-    // Volume features
     let volSum = 0, volCnt = 0;
     for (let j = Math.max(0, i - 20); j < i; j++) { volSum += klines[j].volume; volCnt++; }
     const volBase = volCnt > 0 ? volSum / volCnt : 0;
     const volMult = volBase > 0 ? k.volume / volBase : 1;
     const buyRatio = k.volume > 0 ? k.takerBuy / k.volume : 0.5;
 
-    // Delta z-score
     const deltas = [];
-    for (let j = Math.max(0, i - 19); j <= i; j++) {
-      deltas.push(2 * klines[j].takerBuy - klines[j].volume);
-    }
+    for (let j = Math.max(0, i - 19); j <= i; j++) deltas.push(2 * klines[j].takerBuy - klines[j].volume);
     const dMean = MathUtil.mean(deltas);
     const dStd = MathUtil.std(deltas) || 1e-9;
     const deltaZ = (deltas[deltas.length - 1] - dMean) / dStd;
     const cumDelta = MathUtil.sum(deltas);
 
-    // Candle features
     const range = k.high - k.low;
     const cPos = range > 0 ? (k.close - k.low) / range : 0.5;
     const bodyATR = Math.abs(k.close - k.open) / atr;
 
-    // Structure features
-    const { highs, lows } = MathUtil.swingPoints(klines, i, 2);
-    const prevHighs = highs.slice(-3);
-    const prevLows = lows.slice(-3);
-    const lastHigh = prevHighs.length ? prevHighs[prevHighs.length - 1].p : null;
-    const lastLow = prevLows.length ? prevLows[prevLows.length - 1].p : null;
-
+    const { highs, lows } = MathUtil.swings(klines, i, 2);
+    const lastHigh = highs.length ? highs[highs.length - 1].p : null;
+    const lastLow = lows.length ? lows[lows.length - 1].p : null;
     const bosBull = lastHigh !== null && k.close > lastHigh && klines[i - 1].close <= lastHigh ? 1 : 0;
     const bosBear = lastLow !== null && k.close < lastLow && klines[i - 1].close >= lastLow ? 1 : 0;
 
-    // FVG
     let fvgBull = 0, fvgBear = 0;
     for (let j = Math.max(2, i - 6); j <= i; j++) {
       if (klines[j].low > klines[j - 2].high) fvgBull = 1;
       if (klines[j].high < klines[j - 2].low) fvgBear = 1;
     }
 
-    // Premium/discount
     let hi20 = -Infinity, lo20 = Infinity;
     for (let j = Math.max(0, i - 19); j <= i; j++) {
       if (klines[j].high > hi20) hi20 = klines[j].high;
@@ -234,14 +273,8 @@ const Features = {
     const inDiscount = k.close < eq ? 1 : 0;
     const inPremium = k.close > eq ? 1 : 0;
 
-    // Regime
-    let trSum = 0, upDM = 0, dnDM = 0;
+    let upDM = 0, dnDM = 0;
     for (let j = Math.max(1, i - 13); j <= i; j++) {
-      trSum += Math.max(
-        klines[j].high - klines[j].low,
-        Math.abs(klines[j].high - klines[j - 1].close),
-        Math.abs(klines[j].low - klines[j - 1].close)
-      );
       const up = klines[j].high - klines[j - 1].high;
       const dn = klines[j - 1].low - klines[j].low;
       if (up > dn && up > 0) upDM += up;
@@ -249,12 +282,10 @@ const Features = {
     }
     const dx = Math.abs(upDM - dnDM) / (upDM + dnDM || 1) * 100;
 
-    // Higher timeframe bias
     const ref20 = klines[Math.max(0, i - 20)].close;
     const htfUp = k.close > ref20 ? 1 : 0;
     const htfDn = k.close < ref20 ? 1 : 0;
 
-    // RSI
     let gains = 0, losses = 0;
     for (let j = Math.max(1, i - 13); j <= i; j++) {
       const ch = klines[j].close - klines[j - 1].close;
@@ -263,116 +294,64 @@ const Features = {
     const rsi = losses === 0 ? 100 : 100 - 100 / (1 + gains / losses);
     const rsiNorm = (rsi - 50) / 50;
 
-    // Momentum
     const mom5 = (k.close - klines[Math.max(0, i - 5)].close) / klines[Math.max(0, i - 5)].close;
     const mom20 = (k.close - ref20) / (ref20 || 1);
 
-    // Volatility percentile
     const trList = [];
     for (let j = Math.max(1, i - 50); j <= i; j++) {
-      trList.push(Math.max(
-        klines[j].high - klines[j].low,
-        Math.abs(klines[j].high - klines[j - 1].close),
-        Math.abs(klines[j].low - klines[j - 1].close)
-      ));
+      trList.push(Math.max(klines[j].high - klines[j].low,
+                            Math.abs(klines[j].high - klines[j - 1].close),
+                            Math.abs(klines[j].low - klines[j - 1].close)));
     }
-    const volPct = trList.length > 0 ? trList.filter(x => x <= trList[trList.length - 1]).length / trList.length : 0.5;
+    const volPct = trList.filter(x => x <= trList[trList.length - 1]).length / trList.length;
 
-    return [
-      volMult,            // 0: volume multiple vs 20-bar avg
-      bodyATR,            // 1: body size in ATR units
-      cPos,               // 2: close position in range
-      buyRatio,           // 3: taker buy ratio
-      deltaZ,             // 4: delta z-score
-      cumDelta > 0 ? 1 : 0, // 5: cumulative delta sign
-      bosBull,            // 6
-      bosBear,            // 7
-      fvgBull,            // 8
-      fvgBear,            // 9
-      inDiscount,         // 10
-      inPremium,          // 11
-      dx / 100,           // 12: ADX proxy
-      htfUp,              // 13
-      htfDn,              // 14
-      rsiNorm,            // 15
-      mom5,               // 16
-      mom20,              // 17
-      volPct,             // 18
-      k.volume > 0 ? 1 : 0, // 19: valid volume
-      atr / k.close,      // 20: normalized ATR
-      Math.log(k.volume + 1) / 10, // 21: log volume
-      k.trades > 0 ? Math.log(k.trades + 1) / 10 : 0, // 22: log trades
-      range / k.close     // 23: range
-    ];
-  },
-
-  names() {
-    return [
-      'vol_mult', 'body_atr', 'close_pos', 'buy_ratio', 'delta_z', 'cum_delta_pos',
-      'bos_bull', 'bos_bear', 'fvg_bull', 'fvg_bear', 'in_discount', 'in_premium',
-      'adx', 'htf_up', 'htf_down', 'rsi_norm', 'mom_5', 'mom_20', 'vol_pct',
-      'has_volume', 'norm_atr', 'log_volume', 'log_trades', 'range'
-    ];
+    return [volMult, bodyATR, cPos, buyRatio, deltaZ, cumDelta > 0 ? 1 : 0,
+            bosBull, bosBear, fvgBull, fvgBear, inDiscount, inPremium,
+            dx / 100, htfUp, htfDn, rsiNorm, mom5, mom20, volPct,
+            1, atr / k.close, Math.log(k.volume + 1) / 10,
+            k.trades > 0 ? Math.log(k.trades + 1) / 10 : 0, range / k.close];
   }
 };
 
 /* ================================================================
-   SECTION 5: LABELING
-   Triple-barrier method. Correct implementation with no look-ahead.
+   LABELING (unchanged)
    ================================================================ */
-const Labeling = {
-  tripleBarrier(klines, i, profitMult, stopMult, maxHold) {
-    const entry = klines[i].close;
-    const atr = MathUtil.atr(klines, i, 14);
-    const upper = entry + atr * profitMult;
-    const lower = entry - atr * stopMult;
-    const end = Math.min(i + maxHold, klines.length - 1);
-
-    for (let j = i + 1; j <= end; j++) {
-      if (klines[j].high >= upper) return 1;
-      if (klines[j].low <= lower) return 0;
-    }
-    return 0;
-  },
-
-  buildDataset(klines, config) {
-    const X = [], y = [], indices = [];
-    const cfg = config || { profitMult: 1.5, stopMult: 1.0, maxHold: 6 };
-    for (let i = 60; i < klines.length - cfg.maxHold; i++) {
-      const features = Features.extract(klines, i);
-      if (!features) continue;
-      X.push(features);
-      y.push(this.tripleBarrier(klines, i, cfg.profitMult, cfg.stopMult, cfg.maxHold));
-      indices.push(i);
-    }
-    return { X, y, indices };
+function tripleBarrier(klines, i, profitMult, stopMult, maxHold) {
+  const entry = klines[i].close;
+  const atr = MathUtil.atr(klines, i, 14);
+  const upper = entry + atr * profitMult;
+  const lower = entry - atr * stopMult;
+  const end = Math.min(i + maxHold, klines.length - 1);
+  for (let j = i + 1; j <= end; j++) {
+    if (klines[j].high >= upper) return 1;
+    if (klines[j].low <= lower) return 0;
   }
-};
+  return 0;
+}
+
+function buildDataset(klines) {
+  const X = [], y = [];
+  for (let i = 60; i < klines.length - 6; i++) {
+    const f = Features.extract(klines, i);
+    if (!f) continue;
+    X.push(f);
+    y.push(tripleBarrier(klines, i, 1.5, 1.0, 6));
+  }
+  return { X, y };
+}
 
 /* ================================================================
-   SECTION 6: DECISION TREE
-   CART for binary classification. Gini impurity. Recursive.
+   ML — Decision Tree
    ================================================================ */
 class DecisionTree {
-  constructor(maxDepth = 5, minSamples = 10) {
-    this.maxDepth = maxDepth;
-    this.minSamples = minSamples;
-    this.root = null;
-  }
-
-  fit(X, y) {
-    this.root = this._build(X, y, 0);
-  }
-
+  constructor(d = 5, s = 10) { this.maxDepth = d; this.minSamples = s; this.root = null; }
+  fit(X, y) { this.root = this._build(X, y, 0); }
   _build(X, y, depth) {
     const n = X.length;
     if (n === 0) return { leaf: true, prob: 0.5 };
     let c0 = 0, c1 = 0;
     for (let i = 0; i < y.length; i++) { if (y[i] === 1) c1++; else c0++; }
-
-    if (depth >= this.maxDepth || n < this.minSamples || c0 === 0 || c1 === 0) {
-      return { leaf: true, prob: c1 / n };
-    }
+    if (depth >= this.maxDepth || n < this.minSamples || c0 === 0 || c1 === 0) return { leaf: true, prob: c1 / n };
 
     const parentG = 1 - (c0 / n) ** 2 - (c1 / n) ** 2;
     let bestGain = 0, bestF = -1, bestT = 0;
@@ -391,28 +370,19 @@ class DecisionTree {
         }
         const L = l0 + l1, R = r0 + r1;
         if (L < this.minSamples || R < this.minSamples) continue;
-        const gain = parentG
-          - (L / n) * (1 - (l0 / L) ** 2 - (l1 / L) ** 2)
-          - (R / n) * (1 - (r0 / R) ** 2 - (r1 / R) ** 2);
+        const gain = parentG - (L / n) * (1 - (l0 / L) ** 2 - (l1 / L) ** 2) - (R / n) * (1 - (r0 / R) ** 2 - (r1 / R) ** 2);
         if (gain > bestGain) { bestGain = gain; bestF = f; bestT = th; }
       }
     }
-
     if (bestGain === 0 || bestF === -1) return { leaf: true, prob: c1 / n };
-
     const LX = [], LY = [], RX = [], RY = [];
     for (let i = 0; i < n; i++) {
       if (X[i][bestF] <= bestT) { LX.push(X[i]); LY.push(y[i]); }
       else { RX.push(X[i]); RY.push(y[i]); }
     }
-
-    return {
-      leaf: false, feature: bestF, threshold: bestT,
-      left: this._build(LX, LY, depth + 1),
-      right: this._build(RX, RY, depth + 1)
-    };
+    return { leaf: false, feature: bestF, threshold: bestT,
+             left: this._build(LX, LY, depth + 1), right: this._build(RX, RY, depth + 1) };
   }
-
   predict(x) {
     let node = this.root;
     while (!node.leaf) {
@@ -421,530 +391,655 @@ class DecisionTree {
     }
     return node.prob;
   }
-
-  featureImportance(numFeatures) {
-    const counts = new Array(numFeatures).fill(0);
-    const walk = (node) => {
-      if (!node || node.leaf) return;
-      counts[node.feature]++;
-      walk(node.left);
-      walk(node.right);
-    };
-    walk(this.root);
-    return counts;
-  }
 }
 
 /* ================================================================
-   SECTION 7: RANDOM FOREST
-   Bootstrap aggregation of decision trees.
+   ML — Random Forest
    ================================================================ */
 class RandomForest {
-  constructor(nTrees = 20, maxDepth = 5, minSamples = 8) {
-    this.nTrees = nTrees;
-    this.maxDepth = maxDepth;
-    this.minSamples = minSamples;
-    this.trees = [];
-  }
-
+  constructor(n = 15, d = 5, s = 8) { this.nTrees = n; this.maxDepth = d; this.minSamples = s; this.trees = []; }
   fit(X, y) {
     this.trees = [];
     for (let t = 0; t < this.nTrees; t++) {
-      const Xb = [], yb = [];
+      const Xb = [], Yb = [];
       for (let i = 0; i < X.length; i++) {
         const idx = Math.floor(Math.random() * X.length);
-        Xb.push(X[idx]); yb.push(y[idx]);
+        Xb.push(X[idx]); Yb.push(y[idx]);
       }
       const tree = new DecisionTree(this.maxDepth, this.minSamples);
-      tree.fit(Xb, yb);
+      tree.fit(Xb, Yb);
       this.trees.push(tree);
     }
   }
-
   predict(x) {
     let s = 0;
-    for (let i = 0; i < this.trees.length; i++) s += this.trees[i].predict(x);
+    for (const t of this.trees) s += t.predict(x);
     return s / this.trees.length;
   }
-
-  featureImportance(numFeatures) {
-    const agg = new Array(numFeatures).fill(0);
-    for (const t of this.trees) {
-      const imp = t.featureImportance(numFeatures);
-      for (let i = 0; i < numFeatures; i++) agg[i] += imp[i];
-    }
-    return agg.map(v => v / this.trees.length);
-  }
 }
 
 /* ================================================================
-   SECTION 8: GRADIENT BOOSTING
-   Simplified binary classifier. Sequential residual fitting.
-   ================================================================ */
-class GradientBoosting {
-  constructor(nEstimators = 20, learningRate = 0.1, maxDepth = 4) {
-    this.nEstimators = nEstimators;
-    this.lr = learningRate;
-    this.maxDepth = maxDepth;
-    this.trees = [];
-    this.basePred = 0;
-  }
-
-  fit(X, y) {
-    const n = X.length;
-    const pos = y.filter(v => v === 1).length;
-    if (pos === 0 || pos === n) return;
-    this.basePred = Math.log(pos / (n - pos));
-    const preds = new Array(n).fill(this.basePred);
-
-    for (let m = 0; m < this.nEstimators; m++) {
-      const residuals = new Array(n);
-      for (let i = 0; i < n; i++) {
-        const p = 1 / (1 + Math.exp(-preds[i]));
-        residuals[i] = y[i] - p;
-      }
-      const tree = this._buildRegressionTree(X, residuals, 0);
-      this.trees.push(tree);
-      for (let i = 0; i < n; i++) {
-        preds[i] += this.lr * this._predict(tree, X[i]);
-      }
-    }
-  }
-
-  _buildRegressionTree(X, res, depth) {
-    const n = X.length;
-    if (n < 8 || depth >= this.maxDepth) {
-      return { leaf: true, value: res.reduce((a, b) => a + b, 0) / n };
-    }
-    const numFeatures = X[0].length;
-    let bestGain = 0, bestF = -1, bestT = 0;
-    const parentVar = res.reduce((s, r) => s + r * r, 0) / n;
-
-    for (let f = 0; f < numFeatures; f++) {
-      const vals = X.map(r => r[f]);
-      const uniq = Array.from(new Set(vals)).sort((a, b) => a - b);
-      if (uniq.length < 2) continue;
-      const step = Math.max(1, Math.floor(uniq.length / 10));
-      for (let k = step; k < uniq.length; k += step) {
-        const th = uniq[k];
-        const lIdx = [], rIdx = [];
-        for (let i = 0; i < n; i++) {
-          if (X[i][f] <= th) lIdx.push(i); else rIdx.push(i);
-        }
-        if (lIdx.length < 5 || rIdx.length < 5) continue;
-        const lMean = lIdx.reduce((s, i) => s + res[i], 0) / lIdx.length;
-        const rMean = rIdx.reduce((s, i) => s + res[i], 0) / rIdx.length;
-        const lVar = lIdx.reduce((s, i) => s + (res[i] - lMean) ** 2, 0) / lIdx.length;
-        const rVar = rIdx.reduce((s, i) => s + (res[i] - rMean) ** 2, 0) / rIdx.length;
-        const gain = parentVar - (lIdx.length / n) * lVar - (rIdx.length / n) * rVar;
-        if (gain > bestGain) { bestGain = gain; bestF = f; bestT = th; }
-      }
-    }
-
-    if (bestGain === 0 || bestF === -1) {
-      return { leaf: true, value: res.reduce((a, b) => a + b, 0) / n };
-    }
-
-    const lX = [], lR = [], rX = [], rR = [];
-    for (let i = 0; i < n; i++) {
-      if (X[i][bestF] <= bestT) { lX.push(X[i]); lR.push(res[i]); }
-      else { rX.push(X[i]); rR.push(res[i]); }
-    }
-
-    return {
-      leaf: false, feature: bestF, threshold: bestT,
-      left: this._buildRegressionTree(lX, lR, depth + 1),
-      right: this._buildRegressionTree(rX, rR, depth + 1)
-    };
-  }
-
-  _predict(node, x) {
-    while (!node.leaf) {
-      if (x[node.feature] <= node.threshold) node = node.left;
-      else node = node.right;
-    }
-    return node.value;
-  }
-
-  predict(x) {
-    let pred = this.basePred;
-    for (const tree of this.trees) pred += this.lr * this._predict(tree, x);
-    return 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, pred))));
-  }
-}
-
-/* ================================================================
-   SECTION 9: LOGISTIC REGRESSION
-   Gradient descent with L2 regularization.
+   ML — Logistic Regression
    ================================================================ */
 class LogisticRegression {
-  constructor(lr = 0.1, epochs = 150, l2 = 0.01) {
-    this.lr = lr;
-    this.epochs = epochs;
-    this.l2 = l2;
-    this.w = null;
-  }
-
+  constructor(lr = 0.1, ep = 150, l2 = 0.01) { this.lr = lr; this.epochs = ep; this.l2 = l2; this.w = null; }
   fit(X, y) {
     const n = X.length, d = X[0].length;
     this.w = new Array(d).fill(0);
+    const sig = z => 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
     for (let e = 0; e < this.epochs; e++) {
       for (let i = 0; i < n; i++) {
         let z = 0;
         for (let j = 0; j < d; j++) z += this.w[j] * X[i][j];
-        const p = 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
-        const err = p - y[i];
-        for (let j = 0; j < d; j++) {
-          this.w[j] -= this.lr * (err * X[i][j] + this.l2 * this.w[j]);
-        }
+        const p = sig(z), err = p - y[i];
+        for (let j = 0; j < d; j++) this.w[j] -= this.lr * (err * X[i][j] + this.l2 * this.w[j]);
       }
     }
   }
-
   predict(x) {
     let z = 0;
     for (let j = 0; j < x.length; j++) z += this.w[j] * x[j];
     return 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
   }
-
-  coefficients() { return this.w ? this.w.slice() : []; }
 }
 
 /* ================================================================
-   SECTION 10: ENSEMBLE MODEL
-   Combines RF + GB + LR, then applies a meta-labeler.
+   ML — Ensemble
    ================================================================ */
 class EnsembleCore {
   constructor() {
     this.rf = new RandomForest(15, 5, 8);
-    this.gb = new GradientBoosting(15, 0.1, 4);
     this.lr = new LogisticRegression(0.1, 120, 0.01);
     this.meta = null;
     this.isTrained = false;
   }
-
   fit(X, y) {
     const pos = y.filter(v => v === 1).length;
     if (pos < 5 || pos > y.length - 5) return false;
     this.rf.fit(X, y);
-    this.gb.fit(X, y);
     this.lr.fit(X, y);
     this.isTrained = true;
-
-    const primaryPreds = X.map(x => this.predictPrimary(x));
-    const metaX = X.map((x, i) => [1, primaryPreds[i], x[0], x[1], x[2]]);
+    const preds = X.map(x => this.predictPrimary(x));
+    const metaX = X.map((x, i) => [1, preds[i], x[0], x[1], x[2]]);
     this.meta = new LogisticRegression(0.05, 80, 0.01);
     this.meta.fit(metaX, y);
     return true;
   }
-
-  predictPrimary(x) {
-    return this.rf.predict(x) * 0.4 + this.gb.predict(x) * 0.4 + this.lr.predict(x) * 0.2;
-  }
-
+  predictPrimary(x) { return this.rf.predict(x) * 0.7 + this.lr.predict(x) * 0.3; }
   predict(x) {
     if (!this.isTrained) return 0.5;
     const p = this.predictPrimary(x);
     if (!this.meta) return p;
-    const metaP = this.meta.predict([1, p, x[0], x[1], x[2]]);
-    return p * metaP;
-  }
-
-  featureImportance(numFeatures) {
-    return this.rf.featureImportance(numFeatures);
+    return p * this.meta.predict([1, p, x[0], x[1], x[2]]);
   }
 }
 
 /* ================================================================
-   SECTION 11: VALIDATION
-   Walk-forward splits with purge and embargo.
-   Correct implementation, no look-ahead.
+   SIGNAL ENGINE
+   Fuses AI + SMC + Order Flow + Regime
    ================================================================ */
-const Validation = {
-  walkForwardSplit(n, nSplits = 5, embargoPct = 0.01, maxHoldBars = 6) {
-    const splits = [];
-    const testSize = Math.floor(n / (nSplits + 1));
-    const embargo = Math.max(maxHoldBars, Math.floor(n * embargoPct));
+const SignalEngine = {
+  detect(klines, i, aiModel) {
+    if (i < 60 || i >= klines.length) return null;
+    const features = Features.extract(klines, i);
+    if (!features) return null;
 
-    for (let k = 1; k <= nSplits; k++) {
-      const trainEnd = k * testSize;
-      const testStart = trainEnd + embargo;
-      const testEnd = Math.min(testStart + testSize, n);
-      if (testStart >= n || testEnd - testStart < 20) continue;
-      // Purge last maxHoldBars of train (overlapping labels)
-      const purgeStart = Math.max(0, trainEnd - maxHoldBars);
-      splits.push({
-        trainIndices: Array.from({ length: purgeStart }, (_, i) => i),
-        testIndices: Array.from({ length: testEnd - testStart }, (_, i) => testStart + i)
-      });
-    }
-    return splits;
-  },
+    const aiProb = aiModel ? aiModel.predict(features) : 0.5;
+    if (aiProb < CFG.minProb) return null;
 
-  computeMetrics(yTrue, yPred) {
-    let tp = 0, tn = 0, fp = 0, fn = 0;
-    for (let i = 0; i < yTrue.length; i++) {
-      if (yTrue[i] === 1 && yPred[i] === 1) tp++;
-      else if (yTrue[i] === 0 && yPred[i] === 0) tn++;
-      else if (yTrue[i] === 0 && yPred[i] === 1) fp++;
-      else fn++;
-    }
-    const total = tp + tn + fp + fn;
-    const accuracy = total > 0 ? (tp + tn) / total : 0;
-    const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
-    const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
-    const f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0;
-    return { accuracy, precision, recall, f1, tp, tn, fp, fn, total };
-  }
-};
+    const smc = this.detectSMC(klines, i);
+    const of = this.detectOF(klines, i);
+    const regime = this.detectRegime(klines, i);
 
-/* ================================================================
-   SECTION 12: TRAINING PIPELINE
-   Orchestrates feature extraction, labeling, training, validation.
-   ================================================================ */
-const Pipeline = {
-  async trainAndValidate(symbol, interval, limit, config) {
-    Log.section(`PIPELINE: ${symbol} ${interval}`);
+    const structCount = [smc.bos.bull, smc.bos.bear, smc.choch.bull, smc.choch.bear,
+                         smc.ob.bull, smc.ob.bear, smc.fvg.bull, smc.fvg.bear,
+                         smc.sweep.high, smc.sweep.low, smc.judas.bull, smc.judas.bear,
+                         smc.turtle.bull, smc.turtle.bear].filter(x => x).length;
+    if (structCount < CFG.minStruct) return null;
 
-    // STEP 1: Fetch
-    Log.write('Fetching klines...', 'info');
-    const klines = await DataLayer.fetchKlines(symbol, interval, limit);
-    Log.write(`Loaded ${klines.length} bars`, 'pass');
+    if (regime.name === 'RANGING' && !smc.choch.bull && !smc.choch.bear) return null;
 
-    // STEP 2: Validate
-    const validation = DataLayer.validate(klines);
-    if (!validation.valid) {
-      Log.write(`Data warnings: ${validation.issues.join(', ')}`, 'warn');
+    let bull = 0, bear = 0;
+    if (of.buyRatio > 0.5) bull += Math.round((of.buyRatio - 0.5) * 30);
+    else bear += Math.round((0.5 - of.buyRatio) * 30);
+
+    if (smc.bos.bull) bull += 3;
+    if (smc.bos.bear) bear += 3;
+    if (smc.choch.bull) bull += 3;
+    if (smc.choch.bear) bear += 3;
+    if (smc.ob.bull) bull += 2;
+    if (smc.ob.bear) bear += 2;
+    if (smc.fvg.bull) bull += 1;
+    if (smc.fvg.bear) bear += 1;
+    if (smc.sweep.low) bull += 2;
+    if (smc.sweep.high) bear += 2;
+    if (smc.judas.bull) bull += 2;
+    if (smc.judas.bear) bear += 2;
+    if (smc.turtle.bull) bull += 2;
+    if (smc.turtle.bear) bear += 2;
+    if (smc.discount) bull += 1;
+    if (smc.premium) bear += 1;
+    if (of.delta > 0) bull += 2;
+    if (of.delta < 0) bear += 2;
+
+    if (bull === bear) return null;
+    const direction = bull > bear ? 'LONG' : 'SHORT';
+
+    if (direction === 'LONG' && of.buyRatio < 0.42) return null;
+    if (direction === 'SHORT' && of.buyRatio > 0.58) return null;
+
+    const score = bull + bear;
+    if (score < CFG.minScore) return null;
+
+    const atr = MathUtil.atr(klines, i, 14);
+    const entry = klines[i].close;
+    let stop;
+    if (direction === 'LONG') {
+      stop = klines[i].low - atr * 0.5;
+      if (smc.sweep.low && smc.sweep.level) stop = Math.min(stop, smc.sweep.level - atr * 0.25);
     } else {
-      Log.write('Data integrity: OK', 'pass');
+      stop = klines[i].high + atr * 0.5;
+      if (smc.sweep.high && smc.sweep.level) stop = Math.max(stop, smc.sweep.level + atr * 0.25);
     }
 
-    // STEP 3: Features & labels
-    Log.write('Extracting features and labels...', 'info');
-    const { X, y, indices } = Labeling.buildDataset(klines, config);
-    if (X.length < 100) throw new Error(`Only ${X.length} samples built`);
+    const risk = Math.abs(entry - stop);
+    if (risk === 0) return null;
 
-    let pos = 0;
-    for (const v of y) if (v === 1) pos++;
-    Log.write(`Dataset: ${X.length} samples (${pos} positive, ${y.length - pos} negative)`, 'info');
-    Log.write(`Class balance: ${(pos / X.length * 100).toFixed(1)}% positive`, 'info');
-
-    if (pos < 20 || pos > X.length - 20) {
-      throw new Error(`Degenerate labels: only ${pos} positive, ${X.length - pos} negative`);
-    }
-
-    // STEP 4: Walk-forward validation
-    Log.write('Running walk-forward cross-validation...', 'info');
-    const splits = Validation.walkForwardSplit(X.length, 4, 0.01, 6);
-    Log.write(`Generated ${splits.length} walk-forward splits`, 'info');
-
-    const splitResults = [];
-    for (let s = 0; s < splits.length; s++) {
-      const split = splits[s];
-      const Xtrain = split.trainIndices.map(i => X[i]);
-      const ytrain = split.trainIndices.map(i => y[i]);
-      const Xtest = split.testIndices.map(i => X[i]);
-      const ytest = split.testIndices.map(i => y[i]);
-
-      const model = new EnsembleCore();
-      const trained = model.fit(Xtrain, ytrain);
-      if (!trained) {
-        Log.write(`  Split ${s + 1}: skipped (degenerate labels)`, 'warn');
-        continue;
-      }
-
-      const preds = Xtest.map(x => model.predict(x) > 0.5 ? 1 : 0);
-      const m = Validation.computeMetrics(ytest, preds);
-      splitResults.push(m);
-      Log.write(`  Split ${s + 1}: acc=${(m.accuracy * 100).toFixed(1)}% prec=${(m.precision * 100).toFixed(1)}% n=${m.total}`, 
-        m.accuracy > 0.52 ? 'pass' : m.accuracy > 0.5 ? 'warn' : 'fail');
-    }
-
-    if (splitResults.length === 0) {
-      throw new Error('No successful validation splits');
-    }
-
-    const avgAcc = MathUtil.mean(splitResults.map(m => m.accuracy));
-    const avgPrec = MathUtil.mean(splitResults.map(m => m.precision));
-    const avgRec = MathUtil.mean(splitResults.map(m => m.recall));
-    const avgF1 = MathUtil.mean(splitResults.map(m => m.f1));
-    const baseline = Math.max(pos / X.length, 1 - pos / X.length);
-    const edge = avgAcc - baseline;
-
-    // STEP 5: Train final model on all data
-    Log.write('Training final model on full dataset...', 'info');
-    const finalModel = new EnsembleCore();
-    finalModel.fit(X, y);
-
-    // STEP 6: Feature importance
-    const importance = finalModel.featureImportance(X[0].length);
-    const featureNames = Features.names();
-    const ranked = importance
-      .map((v, i) => ({ name: featureNames[i], value: v }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    Log.write('Top 10 features by importance:', 'info');
-    for (const r of ranked) {
-      if (r.value > 0) Log.write(`  ${r.name.padEnd(18)} ${r.value.toFixed(1)}`, 'info');
-    }
-
-    // STEP 7: Current prediction
-    const lastIdx = klines.length - 1;
-    const currentFeatures = Features.extract(klines, lastIdx);
-    let currentPrediction = 0.5;
-    if (currentFeatures) {
-      currentPrediction = finalModel.predict(currentFeatures);
-    }
+    const tp1 = direction === 'LONG' ? entry + risk * 1.5 : entry - risk * 1.5;
+    const tp2 = direction === 'LONG' ? entry + risk * 2.5 : entry - risk * 2.5;
+    const tp3 = direction === 'LONG' ? entry + risk * 4.0 : entry - risk * 4.0;
+    const rr = Math.abs(tp2 - entry) / risk;
+    if (rr < CFG.minRR) return null;
 
     return {
-      symbol, interval,
-      totalSamples: X.length,
-      positives: pos,
-      negatives: X.length - pos,
-      baseline,
-      splits: splitResults,
-      avgAcc, avgPrec, avgRec, avgF1, edge,
-      topFeatures: ranked,
-      currentPrediction,
-      currentPrice: klines[lastIdx].close,
-      lastBarTime: klines[lastIdx].time,
-      model: finalModel
+      direction, entry, stop, tp1, tp2, tp3, rr,
+      aiProb, structCount, score, regime: regime.name,
+      smc, of, regime,
+      evidence: this.buildEvidence(smc, of, regime, aiProb, structCount),
+      barIndex: i, timestamp: klines[i].time
+    };
+  },
+
+  detectSMC(klines, i) {
+    const { highs, lows } = MathUtil.swings(klines, i, 2);
+    const prevH = highs.slice(-5), prevL = lows.slice(-5);
+    const lastH = prevH.length ? prevH[prevH.length - 1] : null;
+    const lastL = prevL.length ? prevL[prevL.length - 1] : null;
+
+    const bos = {
+      bull: lastH && klines[i].close > lastH.p && klines[i - 1].close <= lastH.p,
+      bear: lastL && klines[i].close < lastL.p && klines[i - 1].close >= lastL.p
+    };
+
+    const prevH2 = prevH.length >= 2 ? prevH[prevH.length - 2] : null;
+    const prevL2 = prevL.length >= 2 ? prevL[prevL.length - 2] : null;
+    const choch = {
+      bull: lastH && klines[i].close > lastH.p && prevH2 && prevH2.p < lastH.p,
+      bear: lastL && klines[i].close < lastL.p && prevL2 && prevL2.p > lastL.p
+    };
+
+    let fvgBull = false, fvgBear = false;
+    for (let j = Math.max(2, i - 6); j <= i; j++) {
+      if (klines[j].low > klines[j - 2].high) fvgBull = true;
+      if (klines[j].high < klines[j - 2].low) fvgBear = true;
+    }
+
+    const atr = MathUtil.atr(klines, i, 14);
+    const disp = Math.abs(klines[i].close - klines[i].open) / atr;
+    let obBull = null, obBear = null;
+    if (disp > 1.3) {
+      for (let j = i - 6; j < i; j++) {
+        if (j < 1) continue;
+        if (klines[i].close > klines[i].open && klines[j].close < klines[j].open && klines[i].close > klines[j].high) {
+          obBull = { high: klines[j].high, low: klines[j].low }; break;
+        }
+        if (klines[i].close < klines[i].open && klines[j].close > klines[j].open && klines[i].close < klines[j].low) {
+          obBear = { high: klines[j].high, low: klines[j].low }; break;
+        }
+      }
+    }
+
+    let sweepHigh = false, sweepLow = false, sweepLevel = null;
+    for (let j = Math.max(0, i - 2); j <= i; j++) {
+      for (const h of prevH) if (klines[j].high > h.p && klines[j].close < h.p) { sweepHigh = true; sweepLevel = h.p; }
+      for (const l of prevL) if (klines[j].low < l.p && klines[j].close > l.p) { sweepLow = true; sweepLevel = l.p; }
+    }
+
+    let hi20 = -Infinity, lo20 = Infinity;
+    for (let j = Math.max(0, i - 19); j <= i; j++) {
+      if (klines[j].high > hi20) hi20 = klines[j].high;
+      if (klines[j].low < lo20) lo20 = klines[j].low;
+    }
+    const eq = (hi20 + lo20) / 2;
+    const premium = klines[i].close > eq;
+    const discount = klines[i].close < eq;
+
+    const judas = { bull: sweepLow && klines[i].close > klines[i].open, bear: sweepHigh && klines[i].close < klines[i].open };
+    const turtle = {
+      bull: lastL && klines[i].low < lastL.p && klines[i].close > lastL.p && (lastL.p - klines[i].low) > Math.abs(klines[i].close - klines[i].open) * 0.7,
+      bear: lastH && klines[i].high > lastH.p && klines[i].close < lastH.p && (klines[i].high - lastH.p) > Math.abs(klines[i].close - klines[i].open) * 0.7
+    };
+
+    return { bos, choch, ob: { bull: obBull, bear: obBear }, fvg: { bull: fvgBull, bear: fvgBear },
+             sweep: { high: sweepHigh, low: sweepLow, level: sweepLevel }, premium, discount, eq, judas, turtle };
+  },
+
+  detectOF(klines, i) {
+    const k = klines[i];
+    const buyRatio = k.volume > 0 ? k.takerBuy / k.volume : 0.5;
+    const delta = 2 * k.takerBuy - k.volume;
+    const deltas = [];
+    for (let j = Math.max(0, i - 19); j <= i; j++) deltas.push(2 * klines[j].takerBuy - klines[j].volume);
+    const dMean = MathUtil.mean(deltas);
+    const dStd = MathUtil.std(deltas) || 1e-9;
+    const deltaZ = (delta - dMean) / dStd;
+    const cumDelta = MathUtil.sum(deltas);
+
+    const body = Math.abs(k.close - k.open);
+    const range = k.high - k.low;
+    const volBase = MathUtil.mean(klines.slice(Math.max(0, i - 20), i).map(x => x.volume));
+    const volMult = volBase > 0 ? k.volume / volBase : 1;
+    const cPos = range > 0 ? (k.close - k.low) / range : 0.5;
+
+    let absorption = null;
+    if (volMult >= 2.0 && range > 0 && body / range < 0.35) {
+      if (cPos < 0.4 && buyRatio > 0.55) absorption = 'BULL';
+      else if (cPos > 0.6 && buyRatio < 0.45) absorption = 'BEAR';
+    }
+    return { buyRatio, delta, deltaZ, cumDelta, volMult, absorption };
+  },
+
+  detectRegime(klines, i) {
+    let upDM = 0, dnDM = 0;
+    for (let j = Math.max(1, i - 13); j <= i; j++) {
+      const up = klines[j].high - klines[j - 1].high;
+      const dn = klines[j - 1].low - klines[j].low;
+      if (up > dn && up > 0) upDM += up;
+      if (dn > up && dn > 0) dnDM += dn;
+    }
+    const dx = Math.abs(upDM - dnDM) / (upDM + dnDM || 1) * 100;
+    const trList = [];
+    for (let j = Math.max(1, i - 50); j <= i; j++) {
+      trList.push(Math.max(klines[j].high - klines[j].low,
+                            Math.abs(klines[j].high - klines[j - 1].close),
+                            Math.abs(klines[j].low - klines[j - 1].close)));
+    }
+    const atrNow = trList[trList.length - 1];
+    const volPct = trList.filter(x => x <= atrNow).length / trList.length;
+    let name = 'RANGING';
+    if (dx > 25 && volPct > 0.4) name = 'TRENDING';
+    else if (volPct > 0.75) name = 'VOLATILE';
+    return { name, adx: dx, volPct };
+  },
+
+  buildEvidence(smc, of, regime, aiProb, structCount) {
+    const ev = [];
+    if (smc.bos.bull) ev.push('BOS↑');
+    if (smc.bos.bear) ev.push('BOS↓');
+    if (smc.choch.bull) ev.push('CHoCH↑');
+    if (smc.choch.bear) ev.push('CHoCH↓');
+    if (smc.ob.bull) ev.push('OB↑');
+    if (smc.ob.bear) ev.push('OB↓');
+    if (smc.fvg.bull) ev.push('FVG↑');
+    if (smc.fvg.bear) ev.push('FVG↓');
+    if (smc.sweep.low) ev.push('Sweep↓');
+    if (smc.sweep.high) ev.push('Sweep↑');
+    if (smc.judas.bull) ev.push('Judas↑');
+    if (smc.judas.bear) ev.push('Judas↓');
+    if (smc.turtle.bull) ev.push('Turtle↑');
+    if (smc.turtle.bear) ev.push('Turtle↓');
+    if (smc.discount) ev.push('Discount');
+    if (smc.premium) ev.push('Premium');
+    if (of.absorption) ev.push('Absorption ' + of.absorption);
+    return {
+      structure: structCount,
+      aiProb,
+      regime: regime.name,
+      buyRatio: of.buyRatio,
+      deltaZ: of.deltaZ,
+      tags: ev
     };
   }
 };
 
 /* ================================================================
-   SECTION 13: SELF-TEST
-   Runs the pipeline on real data and reports honestly.
+   BACKTEST
    ================================================================ */
-async function runSelfTest(symbol) {
-  symbol = symbol || 'BTCUSDT';
-  Log.init();
-  Log.clear();
+const Backtest = {
+  async run(symbol, tf, limit) {
+    log('Backtest: ' + symbol + ' ' + tf, 'info');
+    const klines = await fetchKlines(symbol, tf, limit);
+    if (klines.length < 400) throw new Error('Insufficient bars: ' + klines.length);
 
-  const btnIds = ['btnTest', 'btnTestEth', 'btnTestSol'];
-  for (const id of btnIds) {
-    const b = document.getElementById(id);
-    if (b) b.disabled = true;
+    const splitIdx = Math.floor(klines.length * CFG.trainSplit);
+    const trainK = klines.slice(0, splitIdx);
+
+    log('Training AI on ' + splitIdx + ' bars...', 'info');
+    const { X, y } = buildDataset(trainK);
+    if (X.length < 100 || y.filter(v => v === 1).length < 20) {
+      throw new Error('Insufficient training labels');
+    }
+
+    const model = new EnsembleCore();
+    if (!model.fit(X, y)) throw new Error('Model training failed');
+    log('Model trained on ' + X.length + ' samples', 'ok');
+
+    log('Testing on ' + (klines.length - splitIdx) + ' bars...', 'info');
+    const trades = [];
+    for (let i = splitIdx; i < klines.length - 20; i++) {
+      const sig = SignalEngine.detect(klines, i, model);
+      if (!sig) continue;
+
+      const entryBar = i + 1;
+      const entryPrice = klines[entryBar].open;
+      let outcome = null, exitPrice = null, exitBar = null;
+
+      for (let j = entryBar; j < Math.min(entryBar + CFG.maxHold, klines.length); j++) {
+        const bar = klines[j];
+        if (sig.direction === 'LONG') {
+          if (bar.low <= sig.stop) { outcome = 'LOSS'; exitPrice = sig.stop; exitBar = j; break; }
+          if (bar.high >= sig.tp2) { outcome = 'WIN'; exitPrice = sig.tp2; exitBar = j; break; }
+        } else {
+          if (bar.high >= sig.stop) { outcome = 'LOSS'; exitPrice = sig.stop; exitBar = j; break; }
+          if (bar.low <= sig.tp2) { outcome = 'WIN'; exitPrice = sig.tp2; exitBar = j; break; }
+        }
+      }
+      if (!outcome) {
+        outcome = 'EXPIRED';
+        exitBar = Math.min(entryBar + CFG.maxHold, klines.length - 1);
+        exitPrice = klines[exitBar].close;
+      }
+
+      const pnl = sig.direction === 'LONG'
+        ? (exitPrice - entryPrice) / entryPrice
+        : (entryPrice - exitPrice) / entryPrice;
+
+      trades.push({
+        direction: sig.direction, entryPrice, exitPrice, outcome, pnl,
+        aiProb: sig.aiProb, score: sig.score, rr: sig.rr,
+        timestamp: klines[i].time, barIndex: i
+      });
+    }
+
+    return this.metrics(trades, symbol, tf, splitIdx, klines.length);
+  },
+
+  metrics(trades, symbol, tf, trainBars, totalBars) {
+    if (trades.length === 0) {
+      return { symbol, tf, trades: 0, trainBars, testBars: totalBars - trainBars, error: 'No trades generated' };
+    }
+    const wins = trades.filter(t => t.outcome === 'WIN');
+    const losses = trades.filter(t => t.outcome === 'LOSS');
+    const expired = trades.filter(t => t.outcome === 'EXPIRED');
+
+    const winRate = wins.length / trades.length;
+    const totalWinPnL = wins.reduce((s, t) => s + t.pnl, 0);
+    const totalLossPnL = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
+    const profitFactor = totalLossPnL > 0 ? totalWinPnL / totalLossPnL : (wins.length > 0 ? 99 : 0);
+
+    let peak = 0, maxDD = 0, cum = 0;
+    const equityCurve = [0];
+    for (const t of trades) {
+      cum += t.pnl;
+      equityCurve.push(cum);
+      if (cum > peak) peak = cum;
+      const dd = peak - cum;
+      if (dd > maxDD) maxDD = dd;
+    }
+
+    const avgWin = wins.length > 0 ? totalWinPnL / wins.length : 0;
+    const avgLoss = losses.length > 0 ? totalLossPnL / losses.length : 0;
+
+    return {
+      symbol, tf,
+      trades: trades.length,
+      wins: wins.length, losses: losses.length, expired: expired.length,
+      winRate, profitFactor, avgWin, avgLoss,
+      totalReturn: cum, maxDrawdown: maxDD,
+      trainBars, testBars: totalBars - trainBars,
+      tradesList: trades
+    };
   }
+};
 
-  const resultsEl = document.getElementById('results');
-  resultsEl.innerHTML = '<div class="panel"><pre>Running...</pre></div>';
+/* ================================================================
+   UI — SIGNALS
+   ================================================================ */
+let SIGNAL_CACHE = { results: [], lastScan: 0 };
+
+async function scanSignals() {
+  const btn = document.getElementById('btnScan');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  const feed = document.getElementById('sigFeed');
+  feed.innerHTML = '<div class="empty">Scanning… this takes 10-20 seconds</div>';
+
+  const symbols = document.getElementById('sigSymbols').value.split(',');
+  const tfs = document.getElementById('sigTFs').value.split(',');
+  const results = [];
+  let totalFetched = 0;
 
   try {
-    Log.write(`Starting self-test for ${symbol}`, 'info');
-    const result = await Pipeline.trainAndValidate(symbol, '1h', 1000, {
-      profitMult: 1.5, stopMult: 1.0, maxHold: 6
-    });
+    for (const sym of symbols) {
+      for (const tf of tfs) {
+        try {
+          const klines = await fetchKlines(sym, tf, 500);
+          totalFetched++;
+          if (klines.length < 400) continue;
 
-    Log.section('FINAL RESULTS');
-    Log.write(`Samples: ${result.totalSamples}`, 'info');
-    Log.write(`Positives: ${result.positives} (${(result.positives / result.totalSamples * 100).toFixed(1)}%)`, 'info');
-    Log.write(`Baseline accuracy: ${(result.baseline * 100).toFixed(1)}%`, 'info');
-    Log.write(`Model accuracy: ${(result.avgAcc * 100).toFixed(1)}%`, 'info');
-    Log.write(`Edge over baseline: ${(result.edge * 100).toFixed(1)} percentage points`,
-      result.edge > 0.02 ? 'pass' : result.edge > 0 ? 'warn' : 'fail');
-    Log.write(`Precision: ${(result.avgPrec * 100).toFixed(1)}%`, 'info');
-    Log.write(`Recall: ${(result.avgRec * 100).toFixed(1)}%`, 'info');
-    Log.write(`F1: ${(result.avgF1 * 100).toFixed(1)}%`, 'info');
+          const splitIdx = Math.floor(klines.length * CFG.trainSplit);
+          const trainK = klines.slice(0, splitIdx);
+          const { X, y } = buildDataset(trainK);
 
-    renderResult(result);
+          if (X.length < 100 || y.filter(v => v === 1).length < 20) continue;
+
+          const model = new EnsembleCore();
+          if (!model.fit(X, y)) continue;
+
+          const sig = SignalEngine.detect(klines, klines.length - 1, model);
+          if (sig) {
+            results.push({
+              symbol: sym, tf, ...sig,
+              price: klines[klines.length - 1].close,
+              age: Date.now() - klines[klines.length - 1].time
+            });
+          }
+        } catch (e) {
+          log(sym + ' ' + tf + ': ' + e.message, 'err');
+        }
+      }
+    }
+    SIGNAL_CACHE.results = results;
+    SIGNAL_CACHE.lastScan = Date.now();
+    renderSignals();
+    log('Scan complete: ' + results.length + ' signals from ' + totalFetched + ' fetches', 'ok');
   } catch (e) {
-    Log.write(`ERROR: ${e.message}`, 'fail');
-    Log.write(e.stack || '', 'fail');
-    resultsEl.innerHTML = `<div class="panel"><div class="verdict bad">ERROR: ${e.message}</div></div>`;
-  }
-
-  for (const id of btnIds) {
-    const b = document.getElementById(id);
-    if (b) b.disabled = false;
+    feed.innerHTML = '<div class="empty" style="color:var(--red)">Scan error: ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scan Now';
   }
 }
 
-function renderResult(result) {
-  const el = document.getElementById('results');
+function renderSignals() {
+  const feed = document.getElementById('sigFeed');
+  const stats = document.getElementById('sigStats');
+  const r = SIGNAL_CACHE.results;
 
-  let verdictClass, verdictText, verdictDetail;
-  if (result.edge > 0.02 && result.avgAcc > 0.55) {
-    verdictClass = 'good';
-    verdictText = '✓ AI PRODUCES REAL SIGNAL';
-    verdictDetail = `Beats baseline by ${(result.edge * 100).toFixed(1)}pp. The AI has predictive power on ${result.symbol}.`;
-  } else if (result.edge > 0.005) {
-    verdictClass = 'mid';
-    verdictText = '⚠ MARGINAL EDGE';
-    verdictDetail = `Only ${(result.edge * 100).toFixed(1)}pp over baseline. Needs stronger features or different labels.`;
-  } else {
-    verdictClass = 'bad';
-    verdictText = '✗ NO PREDICTIVE POWER';
-    verdictDetail = `Edge of ${(result.edge * 100).toFixed(1)}pp is not significant. This AI is not better than guessing the majority class.`;
+  const longs = r.filter(s => s.direction === 'LONG').length;
+  const shorts = r.filter(s => s.direction === 'SHORT').length;
+  const highConf = r.filter(s => s.aiProb >= 0.70).length;
+
+  stats.innerHTML = `
+    <div class="stat"><div class="k">SIGNALS</div><div class="v pass">${r.length}</div></div>
+    <div class="stat"><div class="k">LONG/SHORT</div><div class="v"><span class="pass">${longs}</span>/<span class="fail">${shorts}</span></div></div>
+    <div class="stat"><div class="k">HIGH CONF</div><div class="v warn">${highConf}</div></div>
+    <div class="stat"><div class="k">LAST SCAN</div><div class="v" style="font-size:11px">${new Date(SIGNAL_CACHE.lastScan).toLocaleTimeString()}</div></div>
+  `;
+
+  if (r.length === 0) {
+    feed.innerHTML = '<div class="empty">No qualifying setups.<br><br>The AI ran on every pair and no signal passed all gates.<br>This is the correct output when conditions are not strong.</div>';
+    return;
   }
 
-  const predictionPct = (result.currentPrediction * 100).toFixed(1);
-  const predictionLabel = result.currentPrediction > 0.6 ? 'BULLISH'
-                        : result.currentPrediction < 0.4 ? 'BEARISH'
-                        : 'NEUTRAL';
-  const predictionColor = result.currentPrediction > 0.6 ? 'var(--green)'
-                        : result.currentPrediction < 0.4 ? 'var(--red)'
-                        : 'var(--amber)';
+  feed.innerHTML = r.sort((a, b) => b.aiProb - a.aiProb).map(s => {
+    const cls = s.direction === 'LONG' ? 'long' : 'short';
+    const badge = s.aiProb >= 0.70 ? 'high' : 'mid';
+    const tags = s.evidence.tags.map(t => `<span class="tag on">${t}</span>`).join('');
+    return `
+      <div class="card ${cls}">
+        <div class="card-head">
+          <div><span class="sym">${s.symbol.replace('USDT','')}</span><span class="tf">${s.tf}</span></div>
+          <span class="badge ${badge}">${(s.aiProb*100).toFixed(0)}% ${s.direction === 'LONG' ? '▲' : '▼'}</span>
+        </div>
+        <div class="levels">
+          <div class="lb"><span class="ll">ENTRY</span><span class="lv">${fmt(s.entry)}</span></div>
+          <div class="lb"><span class="ll">STOP</span><span class="lv" style="color:var(--red)">${fmt(s.stop)}</span></div>
+          <div class="lb"><span class="ll">TP2</span><span class="lv" style="color:var(--green)">${fmt(s.tp2)}</span></div>
+          <div class="lb"><span class="ll">R:R</span><span class="lv">${s.rr.toFixed(1)}</span></div>
+        </div>
+        <div class="tagrow">${tags}</div>
+        <div class="evidence">
+          <div>Confidence: ${(s.aiProb*100).toFixed(1)}% · Score: ${s.score} · Structure: ${s.evidence.structure} confirmations</div>
+          <div>Regime: ${s.evidence.regime} · Buy ratio: ${(s.evidence.buyRatio*100).toFixed(0)}% · ΔZ: ${s.evidence.deltaZ.toFixed(1)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
-  let html = '<div class="panel">';
-  html += `<h2 style="margin-top:0">${result.symbol} — ${result.interval}</h2>`;
-  html += '<div class="grid">';
-  html += `<div class="stat"><div class="k">ACCURACY</div><div class="v ${result.avgAcc > 0.55 ? 'pass' : 'fail'}">${(result.avgAcc * 100).toFixed(1)}%</div></div>`;
-  html += `<div class="stat"><div class="k">BASELINE</div><div class="v">${(result.baseline * 100).toFixed(1)}%</div></div>`;
-  html += `<div class="stat"><div class="k">EDGE</div><div class="v ${result.edge > 0.02 ? 'pass' : result.edge > 0 ? 'warn' : 'fail'}">${result.edge > 0 ? '+' : ''}${(result.edge * 100).toFixed(1)}pp</div></div>`;
-  html += `<div class="stat"><div class="k">PRECISION</div><div class="v">${(result.avgPrec * 100).toFixed(1)}%</div></div>`;
-  html += `<div class="stat"><div class="k">RECALL</div><div class="v">${(result.avgRec * 100).toFixed(1)}%</div></div>`;
-  html += `<div class="stat"><div class="k">F1 SCORE</div><div class="v">${(result.avgF1 * 100).toFixed(1)}%</div></div>`;
-  html += `<div class="stat"><div class="k">SAMPLES</div><div class="v">${result.totalSamples}</div></div>`;
-  html += `<div class="stat"><div class="k">POSITIVE RATE</div><div class="v">${(result.positives / result.totalSamples * 100).toFixed(1)}%</div></div>`;
-  html += '</div>';
-
-  html += `<div class="verdict ${verdictClass}">${verdictText}<div style="font-size:11px;font-weight:400;margin-top:6px;opacity:.85">${verdictDetail}</div></div>`;
-
-  html += '<h2>Per-Split Results</h2>';
-  for (let i = 0; i < result.splits.length; i++) {
-    const s = result.splits[i];
-    const cls = s.accuracy > 0.52 ? 'pass' : s.accuracy > 0.5 ? 'warn' : 'fail';
-    html += `<div class="row"><span class="lbl">Split ${i + 1} (n=${s.total})</span><span class="val ${cls}">${(s.accuracy * 100).toFixed(1)}%</span></div>`;
-  }
-
-  html += '<h2>Top Features</h2>';
-  const maxImp = Math.max(...result.topFeatures.map(f => f.value)) || 1;
-  for (const f of result.topFeatures) {
-    if (f.value === 0) continue;
-    const barW = (f.value / maxImp * 100).toFixed(0);
-    html += `<div class="row"><span class="lbl">${f.name}</span><span class="val">${f.value.toFixed(1)}</span></div>`;
-    html += `<div style="height:4px;background:var(--card2);border-radius:2px;margin-bottom:6px"><div style="height:100%;width:${barW}%;background:var(--cyan);border-radius:2px"></div></div>`;
-  }
-
-  html += '<h2>Current Prediction</h2>';
-  html += `<div class="stat" style="background:transparent;padding:0"><div class="k">P(UP)</div><div class="v" style="color:${predictionColor};font-size:22px">${predictionPct}% ${predictionLabel}</div></div>`;
-  html += `<div class="row"><span class="lbl">Price</span><span class="val">${result.currentPrice.toFixed(4)}</span></div>`;
-  html += `<div class="row"><span class="lbl">Bar time</span><span class="val">${new Date(result.lastBarTime).toLocaleString()}</span></div>`;
-
-  html += '<h2>Interpretation</h2>';
-  if (result.edge > 0.02) {
-    html += '<pre style="color:var(--green)">The model consistently beats baseline across walk-forward splits.\nThis means the features contain real predictive signal.\nYou can build a signal engine on top of this AI.</pre>';
-  } else if (result.edge > 0) {
-    html += '<pre style="color:var(--amber)">The model is barely better than baseline.\nThe current features are too weak or too noisy.\nTry: longer training window, different labels, or additional features (funding rate, BTC dominance, regime).</pre>';
-  } else {
-    html += '<pre style="color:var(--red)">The model does NOT beat baseline.\nThis means the current features do not contain predictive signal for this symbol.\nDo not build on this AI yet. Improve features or labels first.</pre>';
-  }
-
-  html += '</div>';
-  el.innerHTML = html;
+function fmt(n) {
+  if (!isFinite(n)) return '—';
+  const a = Math.abs(n);
+  if (a >= 1000) return n.toFixed(1);
+  if (a >= 1) return n.toFixed(3);
+  if (a >= 0.01) return n.toFixed(4);
+  return n.toPrecision(4);
 }
 
 /* ================================================================
-   SECTION 14: BOOT
+   UI — BACKTEST
    ================================================================ */
+async function runBacktest() {
+  const btn = document.getElementById('btnBacktest');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  const el = document.getElementById('btResults');
+  el.innerHTML = '<div class="empty">Running backtest…<br>Training AI + simulating trades. Takes ~15 seconds.</div>';
+
+  const symbol = document.getElementById('btSymbol').value;
+  const tf = document.getElementById('btTF').value;
+
+  try {
+    const result = await Backtest.run(symbol, tf, 1000);
+    renderBacktestResult(result);
+  } catch (e) {
+    el.innerHTML = '<div class="empty" style="color:var(--red)">Error: ' + e.message + '</div>';
+    log('Backtest error: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Backtest (1000 bars)';
+  }
+}
+
+function renderBacktestResult(r) {
+  const el = document.getElementById('btResults');
+
+  if (r.error) {
+    el.innerHTML = `<div class="empty" style="color:var(--red)">${r.error}<br><br>This means the AI did not fire any signals in the test period. Try a different symbol or lower the min AI probability in Config.</div>`;
+    return;
+  }
+
+  let vClass, vText, vDetail;
+  if (r.profitFactor >= 1.3 && r.winRate >= 0.5) {
+    vClass = 'good'; vText = '✓ PROFITABLE';
+    vDetail = `PF ${r.profitFactor.toFixed(2)}, WR ${(r.winRate*100).toFixed(0)}%. The AI signals would have made money on this data.`;
+  } else if (r.profitFactor >= 1.0) {
+    vClass = 'mid'; vText = '⚠ MARGINAL';
+    vDetail = `PF ${r.profitFactor.toFixed(2)}. Breakeven-ish. Needs improvement before trading real money.`;
+  } else {
+    vClass = 'bad'; vText = '✗ LOSING STRATEGY';
+    vDetail = `PF ${r.profitFactor.toFixed(2)}. These signals lose money on historical data. Do not trade them.`;
+  }
+
+  const pctRet = r.totalReturn * 100;
+  const pctDD = r.maxDrawdown * 100;
+
+  el.innerHTML = `
+    <div class="stats">
+      <div class="stat"><div class="k">TRADES</div><div class="v">${r.trades}</div></div>
+      <div class="stat"><div class="k">WIN RATE</div><div class="v ${r.winRate >= 0.5 ? 'pass' : 'fail'}">${(r.winRate*100).toFixed(1)}%</div></div>
+      <div class="stat"><div class="k">PROFIT FACTOR</div><div class="v ${r.profitFactor >= 1.3 ? 'pass' : r.profitFactor >= 1 ? 'warn' : 'fail'}">${r.profitFactor.toFixed(2)}</div></div>
+      <div class="stat"><div class="k">TOTAL RETURN</div><div class="v ${pctRet >= 0 ? 'pass' : 'fail'}">${pctRet >= 0 ? '+' : ''}${pctRet.toFixed(1)}%</div></div>
+    </div>
+    <div class="verdict ${vClass}">${vText}<div style="font-size:11px;font-weight:400;margin-top:6px;opacity:.85">${vDetail}</div></div>
+    <div class="card">
+      <div class="row"><span class="lbl">Train bars</span><span class="val">${r.trainBars}</span></div>
+      <div class="row"><span class="lbl">Test bars</span><span class="val">${r.testBars}</span></div>
+      <div class="row"><span class="lbl">Wins / Losses / Expired</span><span class="val">${r.wins} / ${r.losses} / ${r.expired}</span></div>
+      <div class="row"><span class="lbl">Avg win</span><span class="val pass">+${(r.avgWin*100).toFixed(2)}%</span></div>
+      <div class="row"><span class="lbl">Avg loss</span><span class="val fail">${(r.avgLoss*100).toFixed(2)}%</span></div>
+      <div class="row"><span class="lbl">Max drawdown</span><span class="val fail">-${pctDD.toFixed(2)}%</span></div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:12px;margin-bottom:8px;color:var(--cyan)">LAST 10 TRADES</h3>
+      ${r.tradesList.slice(-10).reverse().map(t => `
+        <div class="row">
+          <span class="lbl">${new Date(t.timestamp).toLocaleDateString()} ${t.direction}</span>
+          <span class="val ${t.outcome === 'WIN' ? 'pass' : t.outcome === 'LOSS' ? 'fail' : 'warn'}">${t.outcome} ${(t.pnl*100).toFixed(2)}%</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card">
+      <h3 style="font-size:12px;margin-bottom:8px;color:var(--cyan)">INTERPRETATION</h3>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7">
+        ${r.profitFactor >= 1.3 
+          ? 'The AI produced profitable signals on out-of-sample data. This is encouraging. Before trading real money, run on more symbols and longer history to confirm it is not luck.'
+          : r.profitFactor >= 1.0
+          ? 'Marginal results. The AI has slight edge but not enough to overcome fees and slippage. Improve features or labels, then retest.'
+          : 'The AI signals lose money on this data. This is honest feedback: the current features do not predict well on ' + r.symbol + ' ' + r.tf + '. Try a different timeframe, different symbol, or improve the features.'}
+      </div>
+    </div>
+  `;
+}
+
+/* ================================================================
+   DIAGNOSTICS
+   ================================================================ */
+async function testAPI() {
+  log('Testing Binance API…', 'info');
+  try {
+    const r = await fetch(CFG.BASE + '/api/v3/ping');
+    log('Ping: ' + (r.ok ? 'OK' : 'FAIL') + ' (' + r.status + ')', r.ok ? 'ok' : 'err');
+    const r2 = await fetch(CFG.BASE + '/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=5');
+    if (r2.ok) {
+      const data = await r2.json();
+      log('Klines: OK (' + data.length + ' bars returned)', 'ok');
+    } else {
+      log('Klines: FAIL (' + r2.status + ')', 'err');
+    }
+  } catch (e) {
+    log('Network: ' + e.message, 'err');
+  }
+}
+
+/* ================================================================
+   TABS + BOOT
+   ================================================================ */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+}
+
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
 document.addEventListener('DOMContentLoaded', () => {
-  Log.init();
-  Log.write('AI Core Engine ready', 'pass');
-  Log.write('Click a test button above to train and validate', 'info');
-  Log.write('The self-test uses real Binance data and reports honest accuracy', 'info');
+  updateCfg();
+  log('Institutional IQ ready', 'ok');
+  log('Tap Signals → Scan Now to find live setups', 'info');
+  log('Tap Backtest to validate the strategy historically', 'info');
+  document.getElementById('status').textContent = 'ready';
+  document.getElementById('status').className = 'ok';
 });
 </script>
 </body>
