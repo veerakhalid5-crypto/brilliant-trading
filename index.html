@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>QCity Pro</title>
+<title>QCity Pro v2</title>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -231,6 +231,18 @@ details.sec>.card{margin:0 8px 8px}
         <div class="card"><h4>◆ All Indicators</h4><div id="analysisList"></div></div>
       </div>
 
+      <div class="pane" id="pane-algo">
+        <div class="card"><h4>◆ Dominant Algorithm Model</h4><div id="algoOut"></div></div>
+      </div>
+
+      <div class="pane" id="pane-liqengine">
+        <div class="card"><h4>◆ Liquidity Concentration (4H / 1D)</h4><div id="liqEngineOut"></div></div>
+      </div>
+
+      <div class="pane" id="pane-smcict">
+        <div class="card"><h4>◆ ICT Market Phase · Order Blocks · FVGs</h4><div id="smcictOut"></div></div>
+      </div>
+
       <div class="pane" id="pane-patterns">
         <div class="card">
           <h4>◆ W/M Pattern Scanner — ALL TIMEFRAMES</h4>
@@ -384,6 +396,9 @@ details.sec>.card{margin:0 8px 8px}
   <div id="tabBar">
     <button class="tab on" data-tab="ai">AI</button>
     <button class="tab" data-tab="analysis">ANALYSIS</button>
+    <button class="tab" data-tab="algo">ALGO</button>
+    <button class="tab" data-tab="liqengine">LIQ ENGINE</button>
+    <button class="tab" data-tab="smcict">SMC + ICT</button>
     <button class="tab" data-tab="patterns">PATTERNS W/M</button>
     <button class="tab" data-tab="pro">PRO</button>
     <button class="tab" data-tab="liqmap">LIQ MAP</button>
@@ -432,7 +447,8 @@ const S = {
   chart: null, candleSeries: null, ema20S: null, ema50S: null, ema200S: null,
   vwapS: null, volS: null, bbU: null, bbM: null, bbL: null, stS: null,
   ws: {}, liqPicked: null, oiUSD: null, funding: null,
-  signalScanTimer: null, patternScanAbort: false
+  signalScanTimer: null, patternScanAbort: false,
+  highlightLines: []
 };
 
 const $ = id => document.getElementById(id);
@@ -923,6 +939,364 @@ function currentSession(){
 }
 
 /* ================================================================
+   ALGORITHM MODEL DETECTION
+   ================================================================ */
+function detectAlgorithmModel(candles){
+  if(candles.length < 40) return null;
+  const closes = candles.map(c => c.close);
+  const n = closes.length;
+  const recent = candles.slice(-12);
+  const prior = candles.slice(-40, -12);
+  if(!recent.length || !prior.length) return null;
+
+  const rN = Math.max(...recent.map(c => c.high)) - Math.min(...recent.map(c => c.low));
+  const rP = Math.max(...prior.map(c => c.high)) - Math.min(...prior.map(c => c.low));
+  const rangeRatio = rP ? rN / rP : 1;
+  const vN = recent.reduce((a,c) => a + c.volume, 0) / recent.length;
+  const vP = prior.reduce((a,c) => a + c.volume, 0) / prior.length;
+  const volRatio = vP ? vN / vP : 1;
+  const e20 = ema(closes, 20), e50 = ema(closes, 50);
+  const trendUp = e20[n-1] > e50[n-1];
+
+  const scores = {}, reasons = {};
+  function add(model, w, why){
+    scores[model] = (scores[model] || 0) + w;
+    (reasons[model] = reasons[model] || []).push(why);
+  }
+
+  if(rangeRatio < 0.7 && volRatio < 0.9)
+    add('Accumulation', 40, 'Range compressed ' + rangeRatio.toFixed(2) + '× with declining volume');
+  if(rangeRatio > 1.4 && volRatio > 1.3)
+    add('Volatility expansion', 40, 'Range expanding ' + rangeRatio.toFixed(2) + '× with volume spike');
+
+  const struct = findStructure(candles);
+  const lastBOS = struct.slice().reverse().find(e => e.type === 'BOS');
+  if(lastBOS && n - lastBOS.i < 30){
+    if(lastBOS.dir === 'up' && trendUp)
+      add('Trend continuation', 30, 'Recent bullish BOS aligned with EMA20 > EMA50');
+    if(lastBOS.dir === 'down' && !trendUp)
+      add('Trend continuation', 30, 'Recent bearish BOS aligned with EMA20 < EMA50');
+  }
+
+  const grabs = findLiquidityGrabs(candles);
+  const recentGrabs = grabs.filter(g => (n - 1 - candles.findIndex(c => c.time === g.time)) < 20);
+  if(recentGrabs.length)
+    add('Liquidity hunt', 35, recentGrabs.length + ' recent liquidity grab(s) detected');
+
+  if(rangeRatio > 1.3 && !trendUp)
+    add('Distribution', 35, 'Range expanding while trend weakens');
+
+  const ranked = Object.entries(scores)
+    .map(([model, score]) => ({ model, score, reasons: reasons[model] }))
+    .sort((a, b) => b.score - a.score);
+
+  if(!ranked.length) return null;
+  const total = ranked.reduce((a, b) => a + b.score, 0);
+  return {
+    model: ranked[0].model,
+    confidence: Math.round(ranked[0].score / total * 100),
+    reasons: ranked[0].reasons,
+    alternatives: ranked.slice(1, 3).map(r => ({ model: r.model, confidence: Math.round(r.score / total * 100) }))
+  };
+}
+
+async function renderAlgorithm(){
+  const out = $('algoOut');
+  if(!out) return;
+  if(S.candles.length < 40){
+    out.innerHTML = '<div style="color:#848e9c;font-size:11px">Loading…</div>';
+    return;
+  }
+  const algo = detectAlgorithmModel(S.candles);
+  if(!algo){
+    out.innerHTML = '<div style="color:#848e9c;font-size:11px">Not enough data</div>';
+    return;
+  }
+  let html = '<div class="verdict ' + (algo.confidence >= 55 ? 'bull' : 'neut') + '">' +
+    algo.model + '<small>' + algo.confidence + '% confidence</small></div>';
+  html += '<div style="font-size:11px;color:#848e9c;line-height:1.6">';
+  algo.reasons.forEach(r => { html += '· ' + r + '<br>'; });
+  html += '</div>';
+  if(algo.alternatives.length){
+    html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e2329;font-size:10px;color:#5e6673">';
+    html += 'Alternatives: ' + algo.alternatives.map(a => a.model + ' (' + a.confidence + '%)').join(', ');
+    html += '</div>';
+  }
+  out.innerHTML = html;
+}
+
+/* ================================================================
+   ICT AMD PHASE (4H)
+   ================================================================ */
+async function detectAMDPhase(){
+  try{
+    const k = await fetchKlines(S.sym, '4h', 200);
+    if(k.length < 30) return null;
+    const recent = k.slice(-12);
+    const prior  = k.slice(-40, -12);
+    if(!recent.length || !prior.length) return null;
+
+    const rN = Math.max(...recent.map(c => c.high)) - Math.min(...recent.map(c => c.low));
+    const rP = Math.max(...prior.map(c => c.high))  - Math.min(...prior.map(c => c.low));
+    const rangeRatio = rP ? rN / rP : 1;
+    const vN = recent.reduce((a,c) => a + c.volume, 0) / recent.length;
+    const vP = prior.reduce((a,c) => a + c.volume, 0) / prior.length;
+    const volRatio = vP ? vN / vP : 1;
+
+    const pH = Math.max(...prior.map(c => c.high));
+    const pL = Math.min(...prior.map(c => c.low));
+    const lc = k[k.length-1].close;
+
+    let sweptHigh = false, sweptLow = false;
+    recent.forEach(c => {
+      if(c.high > pH && c.close < pH) sweptHigh = true;
+      if(c.low  < pL && c.close > pL) sweptLow  = true;
+    });
+
+    let acc = 0, man = 0, dis = 0;
+    if(rangeRatio < 0.7) acc += 40; else if(rangeRatio < 0.9) acc += 20;
+    if(volRatio   < 0.8) acc += 30; else if(volRatio   < 1.0) acc += 15;
+    if(lc > pL && lc < pH) acc += 20;
+    if(sweptHigh || sweptLow) man += 50;
+    if(volRatio > 1.4) man += 25;
+    if(rangeRatio > 1.1) man += 15;
+    if(rangeRatio > 1.3) dis += 35;
+    if(volRatio > 1.2) dis += 20;
+    if(Math.abs(lc - pH) / pH < 0.02 || Math.abs(lc - pL) / pL < 0.02) dis += 15;
+
+    const total = acc + man + dis || 1;
+    const mix = { acc: Math.round(acc/total*100), man: Math.round(man/total*100), dis: Math.round(dis/total*100) };
+    let phase = 'Unclear';
+    if(mix.acc >= mix.man && mix.acc >= mix.dis) phase = 'Accumulation';
+    else if(mix.man >= mix.dis) phase = 'Manipulation';
+    else phase = 'Distribution';
+
+    const basis = [
+      'Range ' + rangeRatio.toFixed(2) + '× prior 30-bar range',
+      'Volume ' + volRatio.toFixed(2) + '× prior 30-bar avg'
+    ];
+    if(sweptHigh) basis.push('Recent sweep of prior 4H swing high');
+    if(sweptLow)  basis.push('Recent sweep of prior 4H swing low');
+
+    return { phase, mix, basis };
+  }catch(e){ return null; }
+}
+
+async function renderSMCICTCombined(){
+  const out = $('smcictOut');
+  if(!out) return;
+  if(S.candles.length < 40){
+    out.innerHTML = '<div style="color:#848e9c;font-size:11px">Loading…</div>';
+    return;
+  }
+  out.innerHTML = '<div style="padding:10px;color:#848e9c"><span class="loader"></span>Analyzing…</div>';
+  const amd = await detectAMDPhase();
+  const struct = findStructure(S.candles);
+  const obs = findOBs(S.candles, struct);
+  const fvgs = findFVGs(S.candles);
+
+  let html = '';
+  if(amd){
+    const cls = amd.phase === 'Accumulation' ? 'neut'
+              : amd.phase === 'Distribution' ? 'bear' : 'bull';
+    html += '<div class="verdict ' + cls + '">ICT · ' + amd.phase +
+      '<small>' + amd.mix.acc + '% accumulation · ' + amd.mix.man + '% manipulation · ' +
+      amd.mix.dis + '% distribution</small></div>';
+    html += '<div style="font-size:11px;color:#848e9c;line-height:1.6;margin-bottom:12px">';
+    amd.basis.forEach(b => { html += '· ' + b + '<br>'; });
+    html += '</div>';
+  }
+  html += '<div class="card"><h4>Order Blocks</h4>';
+  if(obs.length){
+    obs.slice(-4).forEach(o => {
+      html += '<div class="kv"><span class="k">' + (o.dir === 'bull' ? 'Bull OB' : 'Bear OB') + '</span>' +
+        '<span class="v">' + fmt(o.low) + ' – ' + fmt(o.high) + '</span></div>';
+    });
+  } else {
+    html += '<div style="color:#848e9c;font-size:11px">None</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="card"><h4>Fair Value Gaps</h4>';
+  if(fvgs.length){
+    fvgs.slice(-4).forEach(f => {
+      html += '<div class="kv"><span class="k">' + (f.dir === 'bull' ? 'Bull FVG' : 'Bear FVG') + '</span>' +
+        '<span class="v">' + fmt(f.low) + ' – ' + fmt(f.high) + '</span></div>';
+    });
+  } else {
+    html += '<div style="color:#848e9c;font-size:11px">None</div>';
+  }
+  html += '</div>';
+
+  out.innerHTML = html;
+}
+
+/* ================================================================
+   ADVANCED LIQUIDITY ENGINE (4H / 1D)
+   ================================================================ */
+function equalLevels(levels, tol){
+  const groups = [], used = new Set();
+  for(let i = 0; i < levels.length; i++){
+    if(used.has(i)) continue;
+    const a = levels[i];
+    const grp = { price: a.price, touches: 1, lastTime: a.time };
+    for(let j = i + 1; j < levels.length; j++){
+      if(used.has(j)) continue;
+      const b = levels[j];
+      if(Math.abs(b.price - a.price) / a.price < tol){
+        grp.price = (grp.price * grp.touches + b.price) / (grp.touches + 1);
+        grp.touches++;
+        grp.lastTime = b.time;
+        used.add(j);
+      }
+    }
+    if(grp.touches >= 2) groups.push(grp);
+    used.add(i);
+  }
+  return groups;
+}
+
+function scoreLiq(g, candles){
+  let s = 0;
+  if(g.touches >= 5) s += 50;
+  else if(g.touches >= 3) s += 30;
+  else if(g.touches >= 2) s += 20;
+  else s += 10;
+  const idx = candles.findIndex(c => c.time >= g.lastTime);
+  const barsAgo = idx < 0 ? 999 : candles.length - 1 - idx;
+  if(barsAgo < 30) s += 20;
+  else if(barsAgo < 100) s += 10;
+  const cur = candles[candles.length-1].close;
+  const dist = Math.abs(g.price - cur) / cur * 100;
+  if(dist < 5) s += 10;
+  else if(dist < 15) s += 5;
+  return Math.min(100, s);
+}
+
+async function buildLiquidityZones(){
+  const zones = [];
+  for(const tf of ['4h', '1d']){
+    try{
+      const k = await fetchKlines(S.sym, tf, 200);
+      if(k.length < 40) continue;
+      const sw = findSwings(k, 5);
+      equalLevels(sw.highs, 0.002).forEach(g => {
+        const score = scoreLiq(g, k);
+        const basis = ['×' + g.touches + ' touches'];
+        if(score >= 65) basis.push('HIGH concentration');
+        zones.push({ tf, type: 'BSL', label: 'Equal highs', price: g.price, touches: g.touches, score, basis });
+      });
+      equalLevels(sw.lows, 0.002).forEach(g => {
+        const score = scoreLiq(g, k);
+        const basis = ['×' + g.touches + ' touches'];
+        if(score >= 65) basis.push('HIGH concentration');
+        zones.push({ tf, type: 'SSL', label: 'Equal lows', price: g.price, touches: g.touches, score, basis });
+      });
+      if(tf === '1d' && k.length >= 2){
+        const prev = k[k.length - 2];
+        zones.push({ tf, type: 'BSL', label: 'Previous day high (PDH)', price: prev.high, touches: 1, score: 80, basis: ['Previous day extreme'] });
+        zones.push({ tf, type: 'SSL', label: 'Previous day low (PDL)',  price: prev.low,  touches: 1, score: 80, basis: ['Previous day extreme'] });
+        const weekStart = Math.floor(k[k.length-1].time / 604800) * 604800;
+        const lastWeek = k.filter(c => c.time < weekStart);
+        if(lastWeek.length){
+          zones.push({ tf: '1w', type: 'BSL', label: 'Prev week high (PWH)', price: Math.max(...lastWeek.map(c => c.high)), touches: 1, score: 85, basis: ['Previous week extreme'] });
+          zones.push({ tf: '1w', type: 'SSL', label: 'Prev week low (PWL)',  price: Math.min(...lastWeek.map(c => c.low)),  touches: 1, score: 85, basis: ['Previous week extreme'] });
+        }
+      }
+    }catch(e){}
+  }
+  zones.sort((a, b) => b.score - a.score);
+  const seen = [];
+  return zones.filter(z => {
+    if(seen.some(s => Math.abs(s.price - z.price) / z.price < 0.003)) return false;
+    seen.push(z);
+    return true;
+  }).slice(0, 15);
+}
+
+async function renderLiquidityEngine(){
+  const out = $('liqEngineOut');
+  if(!out) return;
+  out.innerHTML = '<div style="padding:10px;color:#848e9c"><span class="loader"></span>Scanning 4H / 1D liquidity…</div>';
+  const zones = await buildLiquidityZones();
+  if(!zones.length){
+    out.innerHTML = '<div style="color:#848e9c;font-size:11px">No zones detected</div>';
+    return;
+  }
+  const hot = zones.filter(z => z.score >= 65);
+  let html = '';
+  if(hot.length){
+    html += '<div class="verdict neut" style="font-size:13px">⚠ HIGH LIQUIDITY CONCENTRATION<small>' +
+      hot.length + ' zone(s) scoring ≥65 · estimates from swing geometry and HTF structure</small></div>';
+  }
+  zones.slice(0, 10).forEach(z => {
+    const side = z.type === 'BSL' ? 'Buy-side' : 'Sell-side';
+    const cls  = z.type === 'BSL' ? 'neg' : 'pos';
+    html += '<div class="kv"><span class="k">' + z.tf.toUpperCase() + ' · ' + side + ' · ' + z.label + '</span>' +
+      '<span class="v ' + cls + '">' + fmt(z.price) + ' · score ' + z.score + '</span></div>';
+    if(z.basis.length){
+      html += '<div style="color:#848e9c;font-size:10px;margin:-2px 0 6px 0">' +
+        z.basis.map(b => '· ' + b).join(' ') + '</div>';
+    }
+  });
+  out.innerHTML = html;
+}
+
+/* ================================================================
+   SIGNAL → CHART NAVIGATION
+   ================================================================ */
+function clearChartHighlight(){
+  if(!S.candleSeries) return;
+  S.highlightLines.forEach(l => { try{ S.candleSeries.removePriceLine(l); }catch(e){} });
+  S.highlightLines = [];
+  try{ S.candleSeries.setMarkers([]); }catch(e){}
+}
+
+function highlightSignalOnChart(sig){
+  clearChartHighlight();
+  if(!S.candleSeries) return;
+  try{
+    S.candleSeries.setMarkers([{
+      time: sig.time/1000,
+      position: sig.dir === 'down' ? 'aboveBar' : 'belowBar',
+      color: sig.dir === 'down' ? '#ef5350' : sig.dir === 'up' ? '#26a69a' : '#f0b90b',
+      shape: sig.dir === 'down' ? 'arrowDown' : sig.dir === 'up' ? 'arrowUp' : 'circle',
+      text: sig.type || 'SIG'
+    }]);
+  }catch(e){}
+  try{
+    const line = S.candleSeries.createPriceLine({
+      price: sig.price,
+      color: '#f0b90b',
+      lineWidth: 2,
+      lineStyle: 0,
+      axisLabelVisible: true,
+      title: sig.type || 'SIG'
+    });
+    S.highlightLines.push(line);
+  }catch(e){}
+}
+
+async function navigateToSignal(sig){
+  if(!sig) return;
+  if(sig.sym && sig.sym !== S.sym) await selectSymbol(sig.sym);
+  if(sig.tf && sig.tf !== S.tf) await selectTF(sig.tf);
+  await new Promise(r => setTimeout(r, 200));
+  if(S.chart && sig.time){
+    try{
+      const tfSec = TF_SEC[S.tf] || 300;
+      S.chart.timeScale().setVisibleRange({
+        from: (sig.time/1000) - tfSec * 40,
+        to:   (sig.time/1000) + tfSec * 15
+      });
+    }catch(e){}
+  }
+  highlightSignalOnChart(sig);
+  if(sig.type) { /* already on chart */ }
+  showTab('signals');
+}
+
+/* ================================================================
    CHART
    ================================================================ */
 function initChart(){
@@ -1164,6 +1538,9 @@ function showTab(name){
   setTimeout(resizeChart, 50);
   if(name === 'ai') renderAI();
   if(name === 'analysis') renderAnalysis();
+  if(name === 'algo') renderAlgorithm();
+  if(name === 'liqengine') renderLiquidityEngine();
+  if(name === 'smcict') renderSMCICTCombined();
   if(name === 'pro') renderPro();
   if(name === 'liqmap') renderLiqMap();
   if(name === 'whales') renderWhales();
@@ -1188,7 +1565,7 @@ function closePanel(){
 /* ================================================================
    RENDERERS
    ================================================================ */
-function renderAI(){
+async function renderAI(){
   if(S.candles.length < 60) return;
   const candles = S.candles;
   const n = candles.length;
@@ -1269,6 +1646,16 @@ function renderAI(){
   if(wPat && wPat.breakout){ reasons.push({ c: 'g', t: 'W Bottom', d: 'Bullish W breakout' }); bull++; }
   if(mPat && mPat.breakout){ reasons.push({ c: 'r', t: 'M Top', d: 'Bearish M breakdown' }); bear++; }
 
+  const algo = detectAlgorithmModel(candles);
+  if(algo){
+    const algoIsBull = ['Trend continuation','Accumulation','Volatility expansion'].includes(algo.model) &&
+                       e20 > e50;
+    if(algo.model === 'Liquidity hunt') reasons.push({ c: 'y', t: 'Algorithm', d: 'Liquidity hunt (' + algo.confidence + '%)' });
+    else if(algo.model === 'Distribution') { reasons.push({ c: 'r', t: 'Algorithm', d: 'Distribution (' + algo.confidence + '%)' }); bear++; }
+    else if(algoIsBull) { reasons.push({ c: 'g', t: 'Algorithm', d: algo.model + ' (' + algo.confidence + '%)' }); bull++; }
+    else reasons.push({ c: 'y', t: 'Algorithm', d: algo.model + ' (' + algo.confidence + '%)' });
+  }
+
   const grabs = findLiquidityGrabs(candles);
   if(grabs.length){
     const last = grabs[grabs.length-1];
@@ -1311,6 +1698,21 @@ function renderAI(){
   plan += '<div class="kv"><span class="k">Timeframe</span><span class="v">'+S.tf+'</span></div>';
   plan += '<div class="kv"><span class="k">ATR</span><span class="v">'+fmt(A)+'</span></div>';
   $('aiPlan').innerHTML = plan;
+
+  // Append high-concentration liquidity evidence asynchronously
+  buildLiquidityZones().then(liqZones => {
+    const hotSSL = liqZones.filter(z => z.score >= 65 && z.type === 'SSL').length;
+    const hotBSL = liqZones.filter(z => z.score >= 65 && z.type === 'BSL').length;
+    if(!hotSSL && !hotBSL) return;
+    const reasonsEl = $('aiReasons');
+    if(!reasonsEl) return;
+    if(hotSSL) reasonsEl.insertAdjacentHTML('beforeend',
+      '<div class="sig"><div class="dot g"></div><div class="body"><b>Liquidity</b><span>' +
+      hotSSL + ' high-concentration sell-side zone(s)</span></div></div>');
+    if(hotBSL) reasonsEl.insertAdjacentHTML('beforeend',
+      '<div class="sig"><div class="dot r"></div><div class="body"><b>Liquidity</b><span>' +
+      hotBSL + ' high-concentration buy-side zone(s)</span></div></div>');
+  }).catch(() => {});
 }
 
 function renderAnalysis(){
@@ -1737,14 +2139,9 @@ async function renderWorld(){
   g.fillStyle = '#0b0e11';
   g.fillRect(0, 0, W, H);
 
-  // Simple world outline (dots for continents via coordinate grid)
   g.fillStyle = '#1a2028';
   const continents = [
-    [40,10,60,30],   // Europe area
-    [20,30,50,40],   // Africa
-    [55,15,80,40],   // Asia
-    [-170,15,-50,70], // Americas
-    [110,-50,155,-10] // Australia
+    [40,10,60,30], [20,30,50,40], [55,15,80,40], [-170,15,-50,70], [110,-50,155,-10]
   ];
   continents.forEach(([x1,y1,x2,y2]) => {
     const px = (x1+180)/360*W;
@@ -1754,7 +2151,6 @@ async function renderWorld(){
     g.fillRect(px, py, pw, ph);
   });
 
-  // Compute session flow from last 48h of 15m bars
   try{
     const k = await fetchKlines(S.sym, '15m', 192);
     if(k.length){
@@ -1815,7 +2211,7 @@ function renderSignalFeed(){
   feed.innerHTML = S.signals.slice(0, 80).map(s => {
     const cls = s.dir === 'up' ? 'bull' : 'bear';
     const time = new Date(s.time).toLocaleString();
-    return '<div class="sigItem" onclick="window.__sel(\''+s.sym+'\')">' +
+    return '<div class="sigItem" onclick="window.__nav(\''+s.id+'\')">' +
       '<div class="sigTop"><span class="sigCoin">'+s.name+'</span><span class="sigBadge '+cls+'">'+s.type+'</span></div>' +
       '<div class="sigMeta"><span class="sigTF">'+s.tf+'</span>'+time+' · '+s.detail+'</div></div>';
   }).join('');
@@ -1936,38 +2332,34 @@ function detectSignals(candles, sym, name, tf){
   if(candles.length < 40) return signals;
   const now = candles[candles.length-1].time;
 
-  // BOS/CHoCH
+  function push(type, dir, time, price, detail){
+    signals.push({
+      id: sym + '|' + type + '|' + Math.floor(time/60) + '|' + dir,
+      sym, name, tf, type, dir, time: time*1000, price, detail
+    });
+  }
+
   const struct = findStructure(candles);
   struct.slice(-3).forEach(ev => {
-    if(now - ev.time < 300){
-      signals.push({ sym, name, tf, type: ev.type, dir: ev.dir, time: ev.time*1000, detail: ev.type+' '+ev.dir.toUpperCase()+' @ '+fmt(ev.price) });
-    }
+    if(now - ev.time < 300) push(ev.type, ev.dir, ev.time, ev.price, ev.type + ' ' + ev.dir.toUpperCase() + ' @ ' + fmt(ev.price));
   });
 
-  // Trendline break
   findTrendlines(candles).forEach(tl => {
-    if(tl.isBreak){
-      signals.push({ sym, name, tf, type: 'TREND BREAK', dir: tl.dir === 'up' ? 'down' : 'up', time: now*1000, detail: tl.type+' broken @ '+fmt(tl.proj) });
-    }
+    if(tl.isBreak) push('TREND BREAK', tl.dir === 'up' ? 'down' : 'up', now, tl.proj, tl.type + ' broken @ ' + fmt(tl.proj));
   });
 
-  // Retest
   findTrendlineRetest(candles).forEach(r => {
-    signals.push({ sym, name, tf, type: 'RETEST', dir: r.dir, time: r.retestedAt*1000, detail: r.type+' — '+r.role+' @ '+fmt(r.linePrice) });
+    push('RETEST', r.dir, r.retestedAt, r.linePrice, r.type + ' — ' + r.role + ' @ ' + fmt(r.linePrice));
   });
 
-  // Grabs
   findLiquidityGrabs(candles).forEach(g => {
-    if(now - g.time < 300){
-      signals.push({ sym, name, tf, type: 'LIQ GRAB', dir: g.dir, time: g.time*1000, detail: g.type+' @ '+fmt(g.price) });
-    }
+    if(now - g.time < 300) push('LIQ GRAB', g.dir, g.time, g.price, g.type + ' @ ' + fmt(g.price));
   });
 
-  // W/M
   const w = findWBottom(candles);
-  if(w && w.breakout) signals.push({ sym, name, tf, type: 'W BOTTOM', dir: 'up', time: w.formedAt*1000, detail: 'W breakout above '+fmt(w.neckline) });
+  if(w && w.breakout) push('W BOTTOM', 'up', w.formedAt, w.neckline, 'W breakout above ' + fmt(w.neckline));
   const m = findMTop(candles);
-  if(m && m.breakout) signals.push({ sym, name, tf, type: 'M TOP', dir: 'down', time: m.formedAt*1000, detail: 'M breakdown below '+fmt(m.neckline) });
+  if(m && m.breakout) push('M TOP', 'down', m.formedAt, m.neckline, 'M breakdown below ' + fmt(m.neckline));
 
   return signals;
 }
@@ -1975,7 +2367,7 @@ function detectSignals(candles, sym, name, tf){
 async function runSignalScan(){
   $('signalFeed').innerHTML = '<div style="padding:10px;color:#848e9c"><span class="loader"></span>Scanning top 20 coins…</div>';
   const newSignals = [];
-  const seen = new Set(S.signals.map(s => s.sym+s.type+Math.floor(s.time/60000)));
+  const seen = new Set(S.signals.map(s => s.id));
 
   for(const [sym, name] of COINS.slice(0, 20)){
     try{
@@ -1983,9 +2375,8 @@ async function runSignalScan(){
       if(k.length < 40) continue;
       const sigs = detectSignals(k, sym, name, S.tf);
       sigs.forEach(sig => {
-        const key = sig.sym + sig.type + Math.floor(sig.time/60000);
-        if(!seen.has(key)){
-          seen.add(key);
+        if(!seen.has(sig.id)){
+          seen.add(sig.id);
           newSignals.push(sig);
         }
       });
@@ -2069,6 +2460,9 @@ async function selectSymbol(sym){
 
   if(S.activeTab === 'ai') renderAI();
   if(S.activeTab === 'analysis') renderAnalysis();
+  if(S.activeTab === 'algo') renderAlgorithm();
+  if(S.activeTab === 'liqengine') renderLiquidityEngine();
+  if(S.activeTab === 'smcict') renderSMCICTCombined();
   if(S.activeTab === 'pro') renderPro();
   if(S.activeTab === 'liqmap') renderLiqMap();
   if(S.activeTab === 'mtf') renderMTF();
@@ -2085,6 +2479,8 @@ async function selectTF(tf){
   redrawChart();
   startKlineWS();
   if(S.activeTab === 'ai') renderAI();
+  if(S.activeTab === 'algo') renderAlgorithm();
+  if(S.activeTab === 'smcict') renderSMCICTCombined();
   if(S.activeTab === 'pro') renderPro();
 }
 
@@ -2121,6 +2517,10 @@ function checkAlerts(){
    GLOBAL
    ================================================================ */
 window.__sel = function(sym){ selectSymbol(sym); };
+window.__nav = function(id){
+  const sig = S.signals.find(s => s.id === id);
+  if(sig) navigateToSignal(sig);
+};
 window.__delAlert = function(i){ S.alerts.splice(i, 1); renderAlerts(); };
 
 /* ================================================================
@@ -2151,6 +2551,7 @@ async function boot(){
 
   setInterval(() => {
     if(S.activeTab === 'ai') renderAI();
+    if(S.activeTab === 'algo') renderAlgorithm();
     if(S.activeTab === 'pro') renderPro();
   }, 6000);
   setInterval(checkAlerts, 2000);
