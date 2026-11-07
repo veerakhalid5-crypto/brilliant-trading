@@ -1,88 +1,418 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Test Harness</title>
+<title>AI Core Engine</title>
 <style>
-  body { background: #080a0f; color: #e8ecf1; font-family: ui-monospace, Menlo, monospace; padding: 16px; font-size: 13px; line-height: 1.6; }
-  h1 { font-size: 16px; color: #06b6d4; margin-bottom: 8px; letter-spacing: 1.5px; }
-  button { padding: 12px 24px; background: #0ecb81; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; margin: 12px 0; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .section { background: #12171f; padding: 14px; border-radius: 8px; margin: 12px 0; }
-  .pass { color: #0ecb81; }
-  .fail { color: #f6465d; }
-  .warn { color: #f0b90b; }
-  .info { color: #7a8698; }
-  .big { font-size: 22px; font-weight: bold; }
-  pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
+:root{--bg:#080a0f;--card:#12171f;--card2:#171d27;--line:#1f2733;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--cyan:#06b6d4;--purple:#a855f7;--text:#e8ecf1;--muted:#7a8698;--dim:#4b5563}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);padding:16px;font-size:13px;line-height:1.5}
+h1{font-size:16px;letter-spacing:2px;color:var(--text);font-weight:800;margin-bottom:4px}
+h1 span{color:var(--cyan)}
+h2{font-size:13px;color:var(--cyan);margin:18px 0 8px;letter-spacing:1px;font-weight:700}
+.sub{color:var(--muted);font-size:11px;margin-bottom:16px}
+.panel{background:var(--card);border-radius:12px;padding:14px;margin-bottom:14px;border:1px solid var(--line)}
+.btn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--green);color:#021a10;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.5px;margin-bottom:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-alt{background:transparent;border:1px solid var(--line);color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat{background:var(--card2);padding:10px;border-radius:8px}
+.stat .k{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.5px;margin-bottom:4px}
+.stat .v{font-size:15px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+.pass{color:var(--green)}.fail{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--muted)}.cyan{color:var(--cyan)}
+pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.6}
+#log{background:#05070b;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:400px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.verdict{padding:14px;border-radius:10px;margin-top:12px;font-weight:700;text-align:center;font-size:14px}
+.verdict.good{background:rgba(14,203,129,.15);color:var(--green);border:1px solid rgba(14,203,129,.3)}
+.verdict.mid{background:rgba(240,185,11,.15);color:var(--amber);border:1px solid rgba(240,185,11,.3)}
+.verdict.bad{background:rgba(246,70,93,.15);color:var(--red);border:1px solid rgba(246,70,93,.3)}
+.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:11px}
+.row:last-child{border-bottom:none}
+.row .lbl{color:var(--muted)}
+.row .val{font-family:ui-monospace,Menlo,monospace;font-weight:700}
 </style>
 </head>
 <body>
-<h1>AI TEST HARNESS</h1>
-<p class="info">Answers: Does the AI produce real predictive signal, or is it noise?</p>
-<button id="runBtn" onclick="runTest()">Run AI Test</button>
-<div id="output"></div>
+
+<h1>AI CORE<span>·ENGINE</span></h1>
+<div class="sub">Ensemble ML · Triple-Barrier Labels · Walk-Forward Validation · Honest Reporting</div>
+
+<div class="panel">
+  <button class="btn" id="btnTest" onclick="runSelfTest()">Run Self-Test on BTC/USDT</button>
+  <button class="btn btn-alt" id="btnTestEth" onclick="runSelfTest('ETHUSDT')">Run on ETH/USDT</button>
+  <button class="btn btn-alt" id="btnTestSol" onclick="runSelfTest('SOLUSDT')">Run on SOL/USDT</button>
+</div>
+
+<div id="results"></div>
+
+<h2>EXECUTION LOG</h2>
+<div id="log">ready</div>
 
 <script>
 'use strict';
 
-const out = () => document.getElementById('output');
-const log = (msg, cls = '') => {
-  out().innerHTML += '<div class="' + cls + '">' + msg + '</div>';
-};
-const clear = () => { out().innerHTML = ''; };
+/* ================================================================
+   AI CORE ENGINE
+   Modular implementation. Each component testable in isolation.
+   No dependencies. Runs in any browser.
+   ================================================================ */
 
-/* ---------- Decision Tree ---------- */
+/* ================================================================
+   SECTION 1: LOGGING
+   ================================================================ */
+const Log = {
+  el: null,
+  init() { this.el = document.getElementById('log'); },
+  clear() { if (this.el) this.el.innerHTML = ''; },
+  write(msg, cls) {
+    if (!this.el) return;
+    const line = document.createElement('div');
+    if (cls) line.style.color = cls === 'pass' ? 'var(--green)'
+                                 : cls === 'fail' ? 'var(--red)'
+                                 : cls === 'warn' ? 'var(--amber)'
+                                 : cls === 'info' ? 'var(--muted)'
+                                 : 'var(--text)';
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    this.el.appendChild(line);
+    this.el.scrollTop = this.el.scrollHeight;
+  },
+  section(title) {
+    this.write('─'.repeat(50));
+    this.write('▸ ' + title);
+    this.write('─'.repeat(50));
+  }
+};
+
+/* ================================================================
+   SECTION 2: DATA LAYER
+   Fetches klines from Binance public REST (CORS-safe).
+   Validates data integrity before returning.
+   ================================================================ */
+const DataLayer = {
+  BASE: 'https://data-api.binance.vision',
+
+  async fetchKlines(symbol, interval, limit) {
+    const url = `${this.BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status} for ${symbol} ${interval}`);
+    const raw = await r.json();
+    if (!Array.isArray(raw) || raw.length < 100) {
+      throw new Error(`Insufficient data: ${raw.length} bars`);
+    }
+    return this.normalize(raw);
+  },
+
+  normalize(raw) {
+    return raw.map(k => ({
+      time: +k[0],
+      open: +k[1],
+      high: +k[2],
+      low: +k[3],
+      close: +k[4],
+      volume: +k[5],
+      takerBuy: +k[9],
+      trades: +k[8]
+    }));
+  },
+
+  validate(klines) {
+    const issues = [];
+    if (klines.length < 200) issues.push(`Only ${klines.length} bars (need ≥200)`);
+    let gaps = 0;
+    for (let i = 1; i < klines.length; i++) {
+      if (klines[i].time <= klines[i - 1].time) gaps++;
+    }
+    if (gaps > 0) issues.push(`${gaps} time gaps detected`);
+    for (let i = 0; i < klines.length; i++) {
+      const k = klines[i];
+      if (k.high < k.low) issues.push(`Bar ${i}: high < low`);
+      if (k.close <= 0 || k.volume < 0) issues.push(`Bar ${i}: invalid price/volume`);
+    }
+    return { valid: issues.length === 0, issues };
+  }
+};
+
+/* ================================================================
+   SECTION 3: MATH UTILITIES
+   Pure functions. No state. Every one is testable.
+   ================================================================ */
+const MathUtil = {
+  mean(arr) { return arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0; },
+  std(arr) {
+    if (arr.length < 2) return 0;
+    const m = this.mean(arr);
+    return Math.sqrt(arr.reduce((s, x) => s + (x - m) ** 2, 0) / arr.length);
+  },
+  sum(arr) { return arr.reduce((s, x) => s + x, 0); },
+  clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); },
+
+  atr(klines, idx, period = 14) {
+    let s = 0, cnt = 0;
+    const start = Math.max(1, idx - period + 1);
+    for (let i = start; i <= idx; i++) {
+      const h = klines[i].high, l = klines[i].low, pc = klines[i - 1].close;
+      s += Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+      cnt++;
+    }
+    return cnt > 0 ? s / cnt : 1;
+  },
+
+  swingPoints(klines, idx, n = 2) {
+    const highs = [], lows = [];
+    for (let i = n; i < idx - n; i++) {
+      let isH = true, isL = true;
+      for (let j = 1; j <= n; j++) {
+        if (klines[i].high <= klines[i - j].high || klines[i].high <= klines[i + j].high) isH = false;
+        if (klines[i].low >= klines[i - j].low || klines[i].low >= klines[i + j].low) isL = false;
+      }
+      if (isH) highs.push({ i, p: klines[i].high });
+      if (isL) lows.push({ i, p: klines[i].low });
+    }
+    return { highs, lows };
+  }
+};
+
+/* ================================================================
+   SECTION 4: FEATURE ENGINEERING
+   Extracts 24 features from market data at index i.
+   Only uses data at or before i. No look-ahead.
+   ================================================================ */
+const Features = {
+  extract(klines, i) {
+    if (i < 60) return null;
+    const k = klines[i];
+    const atr = MathUtil.atr(klines, i, 14);
+    if (atr <= 0) return null;
+
+    // Volume features
+    let volSum = 0, volCnt = 0;
+    for (let j = Math.max(0, i - 20); j < i; j++) { volSum += klines[j].volume; volCnt++; }
+    const volBase = volCnt > 0 ? volSum / volCnt : 0;
+    const volMult = volBase > 0 ? k.volume / volBase : 1;
+    const buyRatio = k.volume > 0 ? k.takerBuy / k.volume : 0.5;
+
+    // Delta z-score
+    const deltas = [];
+    for (let j = Math.max(0, i - 19); j <= i; j++) {
+      deltas.push(2 * klines[j].takerBuy - klines[j].volume);
+    }
+    const dMean = MathUtil.mean(deltas);
+    const dStd = MathUtil.std(deltas) || 1e-9;
+    const deltaZ = (deltas[deltas.length - 1] - dMean) / dStd;
+    const cumDelta = MathUtil.sum(deltas);
+
+    // Candle features
+    const range = k.high - k.low;
+    const cPos = range > 0 ? (k.close - k.low) / range : 0.5;
+    const bodyATR = Math.abs(k.close - k.open) / atr;
+
+    // Structure features
+    const { highs, lows } = MathUtil.swingPoints(klines, i, 2);
+    const prevHighs = highs.slice(-3);
+    const prevLows = lows.slice(-3);
+    const lastHigh = prevHighs.length ? prevHighs[prevHighs.length - 1].p : null;
+    const lastLow = prevLows.length ? prevLows[prevLows.length - 1].p : null;
+
+    const bosBull = lastHigh !== null && k.close > lastHigh && klines[i - 1].close <= lastHigh ? 1 : 0;
+    const bosBear = lastLow !== null && k.close < lastLow && klines[i - 1].close >= lastLow ? 1 : 0;
+
+    // FVG
+    let fvgBull = 0, fvgBear = 0;
+    for (let j = Math.max(2, i - 6); j <= i; j++) {
+      if (klines[j].low > klines[j - 2].high) fvgBull = 1;
+      if (klines[j].high < klines[j - 2].low) fvgBear = 1;
+    }
+
+    // Premium/discount
+    let hi20 = -Infinity, lo20 = Infinity;
+    for (let j = Math.max(0, i - 19); j <= i; j++) {
+      if (klines[j].high > hi20) hi20 = klines[j].high;
+      if (klines[j].low < lo20) lo20 = klines[j].low;
+    }
+    const eq = (hi20 + lo20) / 2;
+    const inDiscount = k.close < eq ? 1 : 0;
+    const inPremium = k.close > eq ? 1 : 0;
+
+    // Regime
+    let trSum = 0, upDM = 0, dnDM = 0;
+    for (let j = Math.max(1, i - 13); j <= i; j++) {
+      trSum += Math.max(
+        klines[j].high - klines[j].low,
+        Math.abs(klines[j].high - klines[j - 1].close),
+        Math.abs(klines[j].low - klines[j - 1].close)
+      );
+      const up = klines[j].high - klines[j - 1].high;
+      const dn = klines[j - 1].low - klines[j].low;
+      if (up > dn && up > 0) upDM += up;
+      if (dn > up && dn > 0) dnDM += dn;
+    }
+    const dx = Math.abs(upDM - dnDM) / (upDM + dnDM || 1) * 100;
+
+    // Higher timeframe bias
+    const ref20 = klines[Math.max(0, i - 20)].close;
+    const htfUp = k.close > ref20 ? 1 : 0;
+    const htfDn = k.close < ref20 ? 1 : 0;
+
+    // RSI
+    let gains = 0, losses = 0;
+    for (let j = Math.max(1, i - 13); j <= i; j++) {
+      const ch = klines[j].close - klines[j - 1].close;
+      if (ch > 0) gains += ch; else losses -= ch;
+    }
+    const rsi = losses === 0 ? 100 : 100 - 100 / (1 + gains / losses);
+    const rsiNorm = (rsi - 50) / 50;
+
+    // Momentum
+    const mom5 = (k.close - klines[Math.max(0, i - 5)].close) / klines[Math.max(0, i - 5)].close;
+    const mom20 = (k.close - ref20) / (ref20 || 1);
+
+    // Volatility percentile
+    const trList = [];
+    for (let j = Math.max(1, i - 50); j <= i; j++) {
+      trList.push(Math.max(
+        klines[j].high - klines[j].low,
+        Math.abs(klines[j].high - klines[j - 1].close),
+        Math.abs(klines[j].low - klines[j - 1].close)
+      ));
+    }
+    const volPct = trList.length > 0 ? trList.filter(x => x <= trList[trList.length - 1]).length / trList.length : 0.5;
+
+    return [
+      volMult,            // 0: volume multiple vs 20-bar avg
+      bodyATR,            // 1: body size in ATR units
+      cPos,               // 2: close position in range
+      buyRatio,           // 3: taker buy ratio
+      deltaZ,             // 4: delta z-score
+      cumDelta > 0 ? 1 : 0, // 5: cumulative delta sign
+      bosBull,            // 6
+      bosBear,            // 7
+      fvgBull,            // 8
+      fvgBear,            // 9
+      inDiscount,         // 10
+      inPremium,          // 11
+      dx / 100,           // 12: ADX proxy
+      htfUp,              // 13
+      htfDn,              // 14
+      rsiNorm,            // 15
+      mom5,               // 16
+      mom20,              // 17
+      volPct,             // 18
+      k.volume > 0 ? 1 : 0, // 19: valid volume
+      atr / k.close,      // 20: normalized ATR
+      Math.log(k.volume + 1) / 10, // 21: log volume
+      k.trades > 0 ? Math.log(k.trades + 1) / 10 : 0, // 22: log trades
+      range / k.close     // 23: range
+    ];
+  },
+
+  names() {
+    return [
+      'vol_mult', 'body_atr', 'close_pos', 'buy_ratio', 'delta_z', 'cum_delta_pos',
+      'bos_bull', 'bos_bear', 'fvg_bull', 'fvg_bear', 'in_discount', 'in_premium',
+      'adx', 'htf_up', 'htf_down', 'rsi_norm', 'mom_5', 'mom_20', 'vol_pct',
+      'has_volume', 'norm_atr', 'log_volume', 'log_trades', 'range'
+    ];
+  }
+};
+
+/* ================================================================
+   SECTION 5: LABELING
+   Triple-barrier method. Correct implementation with no look-ahead.
+   ================================================================ */
+const Labeling = {
+  tripleBarrier(klines, i, profitMult, stopMult, maxHold) {
+    const entry = klines[i].close;
+    const atr = MathUtil.atr(klines, i, 14);
+    const upper = entry + atr * profitMult;
+    const lower = entry - atr * stopMult;
+    const end = Math.min(i + maxHold, klines.length - 1);
+
+    for (let j = i + 1; j <= end; j++) {
+      if (klines[j].high >= upper) return 1;
+      if (klines[j].low <= lower) return 0;
+    }
+    return 0;
+  },
+
+  buildDataset(klines, config) {
+    const X = [], y = [], indices = [];
+    const cfg = config || { profitMult: 1.5, stopMult: 1.0, maxHold: 6 };
+    for (let i = 60; i < klines.length - cfg.maxHold; i++) {
+      const features = Features.extract(klines, i);
+      if (!features) continue;
+      X.push(features);
+      y.push(this.tripleBarrier(klines, i, cfg.profitMult, cfg.stopMult, cfg.maxHold));
+      indices.push(i);
+    }
+    return { X, y, indices };
+  }
+};
+
+/* ================================================================
+   SECTION 6: DECISION TREE
+   CART for binary classification. Gini impurity. Recursive.
+   ================================================================ */
 class DecisionTree {
-  constructor(maxDepth, minSamples) {
+  constructor(maxDepth = 5, minSamples = 10) {
     this.maxDepth = maxDepth;
     this.minSamples = minSamples;
     this.root = null;
   }
-  fit(X, y) { this.root = this._build(X, y, 0); }
+
+  fit(X, y) {
+    this.root = this._build(X, y, 0);
+  }
+
   _build(X, y, depth) {
     const n = X.length;
     if (n === 0) return { leaf: true, prob: 0.5 };
-    const d = X[0].length;
     let c0 = 0, c1 = 0;
     for (let i = 0; i < y.length; i++) { if (y[i] === 1) c1++; else c0++; }
+
     if (depth >= this.maxDepth || n < this.minSamples || c0 === 0 || c1 === 0) {
       return { leaf: true, prob: c1 / n };
     }
-    const parentG = 1 - Math.pow(c0 / n, 2) - Math.pow(c1 / n, 2);
+
+    const parentG = 1 - (c0 / n) ** 2 - (c1 / n) ** 2;
     let bestGain = 0, bestF = -1, bestT = 0;
-    for (let f = 0; f < d; f++) {
+
+    for (let f = 0; f < X[0].length; f++) {
       const vals = X.map(r => r[f]);
       const uniq = Array.from(new Set(vals)).sort((a, b) => a - b);
-      const step = Math.max(1, Math.floor(uniq.length / 8));
-      for (let i = step; i < uniq.length; i += step) {
-        const th = uniq[i];
+      if (uniq.length < 2) continue;
+      const step = Math.max(1, Math.floor(uniq.length / 12));
+      for (let k = step; k < uniq.length; k += step) {
+        const th = uniq[k];
         let l0 = 0, l1 = 0, r0 = 0, r1 = 0;
-        for (let j = 0; j < n; j++) {
-          if (X[j][f] <= th) { if (y[j] === 1) l1++; else l0++; }
-          else { if (y[j] === 1) r1++; else r0++; }
+        for (let i = 0; i < n; i++) {
+          if (X[i][f] <= th) { if (y[i] === 1) l1++; else l0++; }
+          else { if (y[i] === 1) r1++; else r0++; }
         }
         const L = l0 + l1, R = r0 + r1;
         if (L < this.minSamples || R < this.minSamples) continue;
         const gain = parentG
-          - (L / n) * (1 - Math.pow(l0 / L, 2) - Math.pow(l1 / L, 2))
-          - (R / n) * (1 - Math.pow(r0 / R, 2) - Math.pow(r1 / R, 2));
+          - (L / n) * (1 - (l0 / L) ** 2 - (l1 / L) ** 2)
+          - (R / n) * (1 - (r0 / R) ** 2 - (r1 / R) ** 2);
         if (gain > bestGain) { bestGain = gain; bestF = f; bestT = th; }
       }
     }
+
     if (bestGain === 0 || bestF === -1) return { leaf: true, prob: c1 / n };
+
     const LX = [], LY = [], RX = [], RY = [];
     for (let i = 0; i < n; i++) {
       if (X[i][bestF] <= bestT) { LX.push(X[i]); LY.push(y[i]); }
       else { RX.push(X[i]); RY.push(y[i]); }
     }
+
     return {
       leaf: false, feature: bestF, threshold: bestT,
       left: this._build(LX, LY, depth + 1),
       right: this._build(RX, RY, depth + 1)
     };
   }
+
   predict(x) {
     let node = this.root;
     while (!node.leaf) {
@@ -91,267 +421,531 @@ class DecisionTree {
     }
     return node.prob;
   }
+
+  featureImportance(numFeatures) {
+    const counts = new Array(numFeatures).fill(0);
+    const walk = (node) => {
+      if (!node || node.leaf) return;
+      counts[node.feature]++;
+      walk(node.left);
+      walk(node.right);
+    };
+    walk(this.root);
+    return counts;
+  }
 }
 
-/* ---------- Random Forest ---------- */
+/* ================================================================
+   SECTION 7: RANDOM FOREST
+   Bootstrap aggregation of decision trees.
+   ================================================================ */
 class RandomForest {
-  constructor(nTrees, maxDepth, minSamples) {
+  constructor(nTrees = 20, maxDepth = 5, minSamples = 8) {
     this.nTrees = nTrees;
     this.maxDepth = maxDepth;
     this.minSamples = minSamples;
     this.trees = [];
   }
+
   fit(X, y) {
     this.trees = [];
     for (let t = 0; t < this.nTrees; t++) {
-      const Xb = [], Yb = [];
+      const Xb = [], yb = [];
       for (let i = 0; i < X.length; i++) {
-        const k = Math.floor(Math.random() * X.length);
-        Xb.push(X[k]); Yb.push(y[k]);
+        const idx = Math.floor(Math.random() * X.length);
+        Xb.push(X[idx]); yb.push(y[idx]);
       }
       const tree = new DecisionTree(this.maxDepth, this.minSamples);
-      tree.fit(Xb, Yb);
+      tree.fit(Xb, yb);
       this.trees.push(tree);
     }
   }
+
   predict(x) {
     let s = 0;
     for (let i = 0; i < this.trees.length; i++) s += this.trees[i].predict(x);
     return s / this.trees.length;
   }
+
+  featureImportance(numFeatures) {
+    const agg = new Array(numFeatures).fill(0);
+    for (const t of this.trees) {
+      const imp = t.featureImportance(numFeatures);
+      for (let i = 0; i < numFeatures; i++) agg[i] += imp[i];
+    }
+    return agg.map(v => v / this.trees.length);
+  }
 }
 
-/* ---------- Logistic Regression ---------- */
-class LogisticRegression {
-  constructor(lr, epochs, l2) {
-    this.lr = lr; this.epochs = epochs; this.l2 = l2; this.w = null;
+/* ================================================================
+   SECTION 8: GRADIENT BOOSTING
+   Simplified binary classifier. Sequential residual fitting.
+   ================================================================ */
+class GradientBoosting {
+  constructor(nEstimators = 20, learningRate = 0.1, maxDepth = 4) {
+    this.nEstimators = nEstimators;
+    this.lr = learningRate;
+    this.maxDepth = maxDepth;
+    this.trees = [];
+    this.basePred = 0;
   }
+
+  fit(X, y) {
+    const n = X.length;
+    const pos = y.filter(v => v === 1).length;
+    if (pos === 0 || pos === n) return;
+    this.basePred = Math.log(pos / (n - pos));
+    const preds = new Array(n).fill(this.basePred);
+
+    for (let m = 0; m < this.nEstimators; m++) {
+      const residuals = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const p = 1 / (1 + Math.exp(-preds[i]));
+        residuals[i] = y[i] - p;
+      }
+      const tree = this._buildRegressionTree(X, residuals, 0);
+      this.trees.push(tree);
+      for (let i = 0; i < n; i++) {
+        preds[i] += this.lr * this._predict(tree, X[i]);
+      }
+    }
+  }
+
+  _buildRegressionTree(X, res, depth) {
+    const n = X.length;
+    if (n < 8 || depth >= this.maxDepth) {
+      return { leaf: true, value: res.reduce((a, b) => a + b, 0) / n };
+    }
+    const numFeatures = X[0].length;
+    let bestGain = 0, bestF = -1, bestT = 0;
+    const parentVar = res.reduce((s, r) => s + r * r, 0) / n;
+
+    for (let f = 0; f < numFeatures; f++) {
+      const vals = X.map(r => r[f]);
+      const uniq = Array.from(new Set(vals)).sort((a, b) => a - b);
+      if (uniq.length < 2) continue;
+      const step = Math.max(1, Math.floor(uniq.length / 10));
+      for (let k = step; k < uniq.length; k += step) {
+        const th = uniq[k];
+        const lIdx = [], rIdx = [];
+        for (let i = 0; i < n; i++) {
+          if (X[i][f] <= th) lIdx.push(i); else rIdx.push(i);
+        }
+        if (lIdx.length < 5 || rIdx.length < 5) continue;
+        const lMean = lIdx.reduce((s, i) => s + res[i], 0) / lIdx.length;
+        const rMean = rIdx.reduce((s, i) => s + res[i], 0) / rIdx.length;
+        const lVar = lIdx.reduce((s, i) => s + (res[i] - lMean) ** 2, 0) / lIdx.length;
+        const rVar = rIdx.reduce((s, i) => s + (res[i] - rMean) ** 2, 0) / rIdx.length;
+        const gain = parentVar - (lIdx.length / n) * lVar - (rIdx.length / n) * rVar;
+        if (gain > bestGain) { bestGain = gain; bestF = f; bestT = th; }
+      }
+    }
+
+    if (bestGain === 0 || bestF === -1) {
+      return { leaf: true, value: res.reduce((a, b) => a + b, 0) / n };
+    }
+
+    const lX = [], lR = [], rX = [], rR = [];
+    for (let i = 0; i < n; i++) {
+      if (X[i][bestF] <= bestT) { lX.push(X[i]); lR.push(res[i]); }
+      else { rX.push(X[i]); rR.push(res[i]); }
+    }
+
+    return {
+      leaf: false, feature: bestF, threshold: bestT,
+      left: this._buildRegressionTree(lX, lR, depth + 1),
+      right: this._buildRegressionTree(rX, rR, depth + 1)
+    };
+  }
+
+  _predict(node, x) {
+    while (!node.leaf) {
+      if (x[node.feature] <= node.threshold) node = node.left;
+      else node = node.right;
+    }
+    return node.value;
+  }
+
+  predict(x) {
+    let pred = this.basePred;
+    for (const tree of this.trees) pred += this.lr * this._predict(tree, x);
+    return 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, pred))));
+  }
+}
+
+/* ================================================================
+   SECTION 9: LOGISTIC REGRESSION
+   Gradient descent with L2 regularization.
+   ================================================================ */
+class LogisticRegression {
+  constructor(lr = 0.1, epochs = 150, l2 = 0.01) {
+    this.lr = lr;
+    this.epochs = epochs;
+    this.l2 = l2;
+    this.w = null;
+  }
+
   fit(X, y) {
     const n = X.length, d = X[0].length;
     this.w = new Array(d).fill(0);
-    const sig = z => 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
     for (let e = 0; e < this.epochs; e++) {
       for (let i = 0; i < n; i++) {
         let z = 0;
         for (let j = 0; j < d; j++) z += this.w[j] * X[i][j];
-        const p = sig(z), err = p - y[i];
-        for (let j = 0; j < d; j++) this.w[j] -= this.lr * (err * X[i][j] + this.l2 * this.w[j]);
+        const p = 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
+        const err = p - y[i];
+        for (let j = 0; j < d; j++) {
+          this.w[j] -= this.lr * (err * X[i][j] + this.l2 * this.w[j]);
+        }
       }
     }
   }
+
   predict(x) {
     let z = 0;
     for (let j = 0; j < x.length; j++) z += this.w[j] * x[j];
     return 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
   }
+
+  coefficients() { return this.w ? this.w.slice() : []; }
 }
 
-/* ---------- Ensemble ---------- */
-class Ensemble {
+/* ================================================================
+   SECTION 10: ENSEMBLE MODEL
+   Combines RF + GB + LR, then applies a meta-labeler.
+   ================================================================ */
+class EnsembleCore {
   constructor() {
     this.rf = new RandomForest(15, 5, 8);
-    this.lr = new LogisticRegression(0.1, 150, 0.01);
+    this.gb = new GradientBoosting(15, 0.1, 4);
+    this.lr = new LogisticRegression(0.1, 120, 0.01);
+    this.meta = null;
+    this.isTrained = false;
   }
+
   fit(X, y) {
+    const pos = y.filter(v => v === 1).length;
+    if (pos < 5 || pos > y.length - 5) return false;
     this.rf.fit(X, y);
+    this.gb.fit(X, y);
     this.lr.fit(X, y);
+    this.isTrained = true;
+
+    const primaryPreds = X.map(x => this.predictPrimary(x));
+    const metaX = X.map((x, i) => [1, primaryPreds[i], x[0], x[1], x[2]]);
+    this.meta = new LogisticRegression(0.05, 80, 0.01);
+    this.meta.fit(metaX, y);
+    return true;
   }
+
+  predictPrimary(x) {
+    return this.rf.predict(x) * 0.4 + this.gb.predict(x) * 0.4 + this.lr.predict(x) * 0.2;
+  }
+
   predict(x) {
-    return this.rf.predict(x) * 0.6 + this.lr.predict(x) * 0.4;
+    if (!this.isTrained) return 0.5;
+    const p = this.predictPrimary(x);
+    if (!this.meta) return p;
+    const metaP = this.meta.predict([1, p, x[0], x[1], x[2]]);
+    return p * metaP;
+  }
+
+  featureImportance(numFeatures) {
+    return this.rf.featureImportance(numFeatures);
   }
 }
 
-/* ---------- Feature Extraction (7 simple features) ---------- */
-function extractFeatures(klines, i) {
-  const o = +klines[i][1], h = +klines[i][2], l = +klines[i][3], c = +klines[i][4];
-  const v = +klines[i][5], tb = +klines[i][9];
-  const range = h - l;
-  const cPos = range > 0 ? (c - l) / range : 0.5;
-  const body = Math.abs(c - o);
+/* ================================================================
+   SECTION 11: VALIDATION
+   Walk-forward splits with purge and embargo.
+   Correct implementation, no look-ahead.
+   ================================================================ */
+const Validation = {
+  walkForwardSplit(n, nSplits = 5, embargoPct = 0.01, maxHoldBars = 6) {
+    const splits = [];
+    const testSize = Math.floor(n / (nSplits + 1));
+    const embargo = Math.max(maxHoldBars, Math.floor(n * embargoPct));
 
-  let volBase = 0, cnt = 0;
-  for (let j = Math.max(0, i - 20); j < i; j++) { volBase += +klines[j][5]; cnt++; }
-  volBase = cnt > 0 ? volBase / cnt : 0;
-  const volMult = volBase > 0 ? v / volBase : 1;
-  const buyRatio = v > 0 ? tb / v : 0.5;
+    for (let k = 1; k <= nSplits; k++) {
+      const trainEnd = k * testSize;
+      const testStart = trainEnd + embargo;
+      const testEnd = Math.min(testStart + testSize, n);
+      if (testStart >= n || testEnd - testStart < 20) continue;
+      // Purge last maxHoldBars of train (overlapping labels)
+      const purgeStart = Math.max(0, trainEnd - maxHoldBars);
+      splits.push({
+        trainIndices: Array.from({ length: purgeStart }, (_, i) => i),
+        testIndices: Array.from({ length: testEnd - testStart }, (_, i) => testStart + i)
+      });
+    }
+    return splits;
+  },
 
-  let atr = 0, atrCnt = 0;
-  for (let j = Math.max(1, i - 13); j <= i; j++) {
-    atr += Math.max(
-      +klines[j][2] - +klines[j][3],
-      Math.abs(+klines[j][2] - +klines[j-1][4]),
-      Math.abs(+klines[j][3] - +klines[j-1][4])
-    );
-    atrCnt++;
+  computeMetrics(yTrue, yPred) {
+    let tp = 0, tn = 0, fp = 0, fn = 0;
+    for (let i = 0; i < yTrue.length; i++) {
+      if (yTrue[i] === 1 && yPred[i] === 1) tp++;
+      else if (yTrue[i] === 0 && yPred[i] === 0) tn++;
+      else if (yTrue[i] === 0 && yPred[i] === 1) fp++;
+      else fn++;
+    }
+    const total = tp + tn + fp + fn;
+    const accuracy = total > 0 ? (tp + tn) / total : 0;
+    const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+    const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+    const f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0;
+    return { accuracy, precision, recall, f1, tp, tn, fp, fn, total };
   }
-  atr = atrCnt > 0 ? atr / atrCnt : 1;
-  const bodyATR = body / atr;
+};
 
-  const ref20 = +klines[Math.max(0, i - 20)][4];
-  const htfUp = c > ref20 ? 1 : 0;
+/* ================================================================
+   SECTION 12: TRAINING PIPELINE
+   Orchestrates feature extraction, labeling, training, validation.
+   ================================================================ */
+const Pipeline = {
+  async trainAndValidate(symbol, interval, limit, config) {
+    Log.section(`PIPELINE: ${symbol} ${interval}`);
 
-  return [volMult, bodyATR, cPos, buyRatio, htfUp, body / (c || 1), range / (c || 1)];
-}
+    // STEP 1: Fetch
+    Log.write('Fetching klines...', 'info');
+    const klines = await DataLayer.fetchKlines(symbol, interval, limit);
+    Log.write(`Loaded ${klines.length} bars`, 'pass');
 
-/* ---------- Triple-Barrier Label ---------- */
-function tripleBarrier(klines, i, profitMult, stopMult, maxHold) {
-  const c = +klines[i][4];
-  let atr = 0, cnt = 0;
-  for (let j = Math.max(1, i - 13); j <= i; j++) {
-    atr += Math.max(
-      +klines[j][2] - +klines[j][3],
-      Math.abs(+klines[j][2] - +klines[j-1][4]),
-      Math.abs(+klines[j][3] - +klines[j-1][4])
-    );
-    cnt++;
+    // STEP 2: Validate
+    const validation = DataLayer.validate(klines);
+    if (!validation.valid) {
+      Log.write(`Data warnings: ${validation.issues.join(', ')}`, 'warn');
+    } else {
+      Log.write('Data integrity: OK', 'pass');
+    }
+
+    // STEP 3: Features & labels
+    Log.write('Extracting features and labels...', 'info');
+    const { X, y, indices } = Labeling.buildDataset(klines, config);
+    if (X.length < 100) throw new Error(`Only ${X.length} samples built`);
+
+    let pos = 0;
+    for (const v of y) if (v === 1) pos++;
+    Log.write(`Dataset: ${X.length} samples (${pos} positive, ${y.length - pos} negative)`, 'info');
+    Log.write(`Class balance: ${(pos / X.length * 100).toFixed(1)}% positive`, 'info');
+
+    if (pos < 20 || pos > X.length - 20) {
+      throw new Error(`Degenerate labels: only ${pos} positive, ${X.length - pos} negative`);
+    }
+
+    // STEP 4: Walk-forward validation
+    Log.write('Running walk-forward cross-validation...', 'info');
+    const splits = Validation.walkForwardSplit(X.length, 4, 0.01, 6);
+    Log.write(`Generated ${splits.length} walk-forward splits`, 'info');
+
+    const splitResults = [];
+    for (let s = 0; s < splits.length; s++) {
+      const split = splits[s];
+      const Xtrain = split.trainIndices.map(i => X[i]);
+      const ytrain = split.trainIndices.map(i => y[i]);
+      const Xtest = split.testIndices.map(i => X[i]);
+      const ytest = split.testIndices.map(i => y[i]);
+
+      const model = new EnsembleCore();
+      const trained = model.fit(Xtrain, ytrain);
+      if (!trained) {
+        Log.write(`  Split ${s + 1}: skipped (degenerate labels)`, 'warn');
+        continue;
+      }
+
+      const preds = Xtest.map(x => model.predict(x) > 0.5 ? 1 : 0);
+      const m = Validation.computeMetrics(ytest, preds);
+      splitResults.push(m);
+      Log.write(`  Split ${s + 1}: acc=${(m.accuracy * 100).toFixed(1)}% prec=${(m.precision * 100).toFixed(1)}% n=${m.total}`, 
+        m.accuracy > 0.52 ? 'pass' : m.accuracy > 0.5 ? 'warn' : 'fail');
+    }
+
+    if (splitResults.length === 0) {
+      throw new Error('No successful validation splits');
+    }
+
+    const avgAcc = MathUtil.mean(splitResults.map(m => m.accuracy));
+    const avgPrec = MathUtil.mean(splitResults.map(m => m.precision));
+    const avgRec = MathUtil.mean(splitResults.map(m => m.recall));
+    const avgF1 = MathUtil.mean(splitResults.map(m => m.f1));
+    const baseline = Math.max(pos / X.length, 1 - pos / X.length);
+    const edge = avgAcc - baseline;
+
+    // STEP 5: Train final model on all data
+    Log.write('Training final model on full dataset...', 'info');
+    const finalModel = new EnsembleCore();
+    finalModel.fit(X, y);
+
+    // STEP 6: Feature importance
+    const importance = finalModel.featureImportance(X[0].length);
+    const featureNames = Features.names();
+    const ranked = importance
+      .map((v, i) => ({ name: featureNames[i], value: v }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    Log.write('Top 10 features by importance:', 'info');
+    for (const r of ranked) {
+      if (r.value > 0) Log.write(`  ${r.name.padEnd(18)} ${r.value.toFixed(1)}`, 'info');
+    }
+
+    // STEP 7: Current prediction
+    const lastIdx = klines.length - 1;
+    const currentFeatures = Features.extract(klines, lastIdx);
+    let currentPrediction = 0.5;
+    if (currentFeatures) {
+      currentPrediction = finalModel.predict(currentFeatures);
+    }
+
+    return {
+      symbol, interval,
+      totalSamples: X.length,
+      positives: pos,
+      negatives: X.length - pos,
+      baseline,
+      splits: splitResults,
+      avgAcc, avgPrec, avgRec, avgF1, edge,
+      topFeatures: ranked,
+      currentPrediction,
+      currentPrice: klines[lastIdx].close,
+      lastBarTime: klines[lastIdx].time,
+      model: finalModel
+    };
   }
-  atr = cnt > 0 ? atr / cnt : 1;
+};
 
-  const upper = c + atr * profitMult;
-  const lower = c - atr * stopMult;
-  const end = Math.min(i + maxHold, klines.length - 1);
+/* ================================================================
+   SECTION 13: SELF-TEST
+   Runs the pipeline on real data and reports honestly.
+   ================================================================ */
+async function runSelfTest(symbol) {
+  symbol = symbol || 'BTCUSDT';
+  Log.init();
+  Log.clear();
 
-  for (let j = i + 1; j <= end; j++) {
-    const cc = +klines[j][4];
-    if (cc >= upper) return 1;
-    if (cc <= lower) return 0;
+  const btnIds = ['btnTest', 'btnTestEth', 'btnTestSol'];
+  for (const id of btnIds) {
+    const b = document.getElementById(id);
+    if (b) b.disabled = true;
   }
-  return 0;
-}
 
-/* ---------- Metrics ---------- */
-function metrics(yTrue, yPred) {
-  let tp = 0, tn = 0, fp = 0, fn = 0;
-  for (let i = 0; i < yTrue.length; i++) {
-    if (yTrue[i] === 1 && yPred[i] === 1) tp++;
-    else if (yTrue[i] === 0 && yPred[i] === 0) tn++;
-    else if (yTrue[i] === 0 && yPred[i] === 1) fp++;
-    else fn++;
-  }
-  const tot = tp + tn + fp + fn;
-  const acc = tot > 0 ? (tp + tn) / tot : 0;
-  const prec = (tp + fp) > 0 ? tp / (tp + fp) : 0;
-  const rec = (tp + fn) > 0 ? tp / (tp + fn) : 0;
-  const f1 = (prec + rec) > 0 ? 2 * prec * rec / (prec + rec) : 0;
-  return { acc, prec, rec, f1, tp, tn, fp, fn };
-}
-
-/* ---------- Main Test ---------- */
-async function runTest() {
-  clear();
-  document.getElementById('runBtn').disabled = true;
+  const resultsEl = document.getElementById('results');
+  resultsEl.innerHTML = '<div class="panel"><pre>Running...</pre></div>';
 
   try {
-    log('<div class="section">Fetching BTC/USDT 1h data from Binance...</div>', 'info');
-    const res = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=1000');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const klines = await res.json();
+    Log.write(`Starting self-test for ${symbol}`, 'info');
+    const result = await Pipeline.trainAndValidate(symbol, '1h', 1000, {
+      profitMult: 1.5, stopMult: 1.0, maxHold: 6
+    });
 
-    if (klines.length < 200) throw new Error('Not enough data: ' + klines.length + ' bars');
-    log('<div class="section">Loaded ' + klines.length + ' bars of BTC/USDT 1h</div>', 'pass');
+    Log.section('FINAL RESULTS');
+    Log.write(`Samples: ${result.totalSamples}`, 'info');
+    Log.write(`Positives: ${result.positives} (${(result.positives / result.totalSamples * 100).toFixed(1)}%)`, 'info');
+    Log.write(`Baseline accuracy: ${(result.baseline * 100).toFixed(1)}%`, 'info');
+    Log.write(`Model accuracy: ${(result.avgAcc * 100).toFixed(1)}%`, 'info');
+    Log.write(`Edge over baseline: ${(result.edge * 100).toFixed(1)} percentage points`,
+      result.edge > 0.02 ? 'pass' : result.edge > 0 ? 'warn' : 'fail');
+    Log.write(`Precision: ${(result.avgPrec * 100).toFixed(1)}%`, 'info');
+    Log.write(`Recall: ${(result.avgRec * 100).toFixed(1)}%`, 'info');
+    Log.write(`F1: ${(result.avgF1 * 100).toFixed(1)}%`, 'info');
 
-    // Build samples
-    const X = [], y = [];
-    for (let i = 60; i < klines.length - 6; i++) {
-      X.push(extractFeatures(klines, i));
-      y.push(tripleBarrier(klines, i, 1.5, 1.0, 6));
-    }
-
-    const total = y.length;
-    let positives = 0;
-    for (let i = 0; i < y.length; i++) positives += y[i];
-    const negCount = total - positives;
-
-    log('<div class="section">', '');
-    log('Samples: ' + total, '');
-    log('Profit labels (1): ' + positives + ' (' + (positives / total * 100).toFixed(1) + '%)', '');
-    log('Loss labels (0): ' + negCount + ' (' + (negCount / total * 100).toFixed(1) + '%)', '');
-    log('</div>', '');
-
-    // 70/30 time split (no shuffle - critical for time series)
-    const split = Math.floor(total * 0.7);
-    const Xtrain = X.slice(0, split), ytrain = y.slice(0, split);
-    const Xtest = X.slice(split), ytest = y.slice(split);
-
-    log('<div class="section">', '');
-    log('Train samples: ' + Xtrain.length, '');
-    log('Test samples:  ' + Xtest.length, '');
-    log('</div>', '');
-
-    // Train
-    const t0 = performance.now();
-    const model = new Ensemble();
-    model.fit(Xtrain, ytrain);
-    const trainMs = performance.now() - t0;
-    log('<div class="section">Training time: ' + trainMs.toFixed(0) + 'ms ' + (trainMs < 3000 ? '✓' : '⚠ slow') + '</div>', trainMs < 3000 ? 'pass' : 'warn');
-
-    // Predict
-    const t1 = performance.now();
-    const preds = Xtest.map(x => model.predict(x) > 0.5 ? 1 : 0);
-    const predMs = performance.now() - t1;
-    log('<div class="section">Prediction time: ' + predMs.toFixed(0) + 'ms</div>', 'info');
-
-    // Metrics
-    const m = metrics(ytest, preds);
-    log('<div class="section">', '');
-    log('<b>RESULTS</b>', '');
-    log('Accuracy:  ' + (m.acc * 100).toFixed(1) + '% ' + (m.acc > 0.55 ? '✓ above 55%' : '✗ below 55%'), m.acc > 0.55 ? 'pass' : 'fail');
-    log('Precision: ' + (m.prec * 100).toFixed(1) + '% (of predicted wins, how many were real)', '');
-    log('Recall:    ' + (m.rec * 100).toFixed(1) + '% (of real wins, how many were caught)', '');
-    log('F1 Score:  ' + (m.f1 * 100).toFixed(1) + '%', '');
-    log('', '');
-    log('Confusion Matrix:', '');
-    log('  True Positives:  ' + m.tp, '');
-    log('  True Negatives:  ' + m.tn, '');
-    log('  False Positives: ' + m.fp, '');
-    log('  False Negatives: ' + m.fn, '');
-    log('</div>', '');
-
-    // Baseline comparison - THE most important part
-    const baseline = Math.max(positives / total, 1 - positives / total);
-    const edge = m.acc - baseline;
-
-    log('<div class="section">', '');
-    log('<b>BASELINE COMPARISON</b>', '');
-    log('Baseline (always predict majority class): ' + (baseline * 100).toFixed(1) + '%', '');
-    log('Model accuracy: ' + (m.acc * 100).toFixed(1) + '%', '');
-    log('Edge over baseline: ' + (edge * 100).toFixed(1) + ' percentage points', '');
-    log('</div>', '');
-
-    // Verdict
-    log('<div class="section">', '');
-    log('<b>VERDICT</b>', '');
-    if (edge > 0.02 && m.acc > 0.55) {
-      log('✓ The AI produces real signal.', 'pass');
-      log('  It beats baseline by ' + (edge * 100).toFixed(1) + '% and beats 55% threshold.', 'pass');
-      log('  The approach is viable. Build on it.', 'pass');
-    } else if (edge > 0.005) {
-      log('⚠ The AI is barely better than random.', 'warn');
-      log('  Edge of only ' + (edge * 100).toFixed(1) + '% over baseline.', 'warn');
-      log('  Needs better features, more data, or regime-specific models.', 'warn');
-    } else {
-      log('✗ The AI is NOT better than baseline.', 'fail');
-      log('  The current features, labels, or model architecture do not work.', 'fail');
-      log('  Do not build a trading system on this yet.', 'fail');
-    }
-    log('</div>', '');
-
-    // What to do next
-    log('<div class="section">', '');
-    log('<b>WHAT TO DO NEXT</b>', '');
-    log('1. If accuracy > 55% and edge > 2%: The AI works. Proceed to build the signal engine.', '');
-    log('2. If accuracy 52-55% or edge 0.5-2%: Improve features. Try adding funding rate, BTC dominance, more SMC features.', '');
-    log('3. If accuracy < 52% or edge < 0.5%: The labels or features need rethinking.', '');
-    log('   Try different triple-barrier settings (profitMult=2.0, maxHold=12).', '');
-    log('4. In ALL cases: verify on a different symbol (ETHUSDT) before trusting it.', '');
-    log('</div>', '');
-
+    renderResult(result);
   } catch (e) {
-    log('<div class="section fail">ERROR: ' + e.message + '</div>', 'fail');
+    Log.write(`ERROR: ${e.message}`, 'fail');
+    Log.write(e.stack || '', 'fail');
+    resultsEl.innerHTML = `<div class="panel"><div class="verdict bad">ERROR: ${e.message}</div></div>`;
   }
 
-  document.getElementById('runBtn').disabled = false;
+  for (const id of btnIds) {
+    const b = document.getElementById(id);
+    if (b) b.disabled = false;
+  }
 }
+
+function renderResult(result) {
+  const el = document.getElementById('results');
+
+  let verdictClass, verdictText, verdictDetail;
+  if (result.edge > 0.02 && result.avgAcc > 0.55) {
+    verdictClass = 'good';
+    verdictText = '✓ AI PRODUCES REAL SIGNAL';
+    verdictDetail = `Beats baseline by ${(result.edge * 100).toFixed(1)}pp. The AI has predictive power on ${result.symbol}.`;
+  } else if (result.edge > 0.005) {
+    verdictClass = 'mid';
+    verdictText = '⚠ MARGINAL EDGE';
+    verdictDetail = `Only ${(result.edge * 100).toFixed(1)}pp over baseline. Needs stronger features or different labels.`;
+  } else {
+    verdictClass = 'bad';
+    verdictText = '✗ NO PREDICTIVE POWER';
+    verdictDetail = `Edge of ${(result.edge * 100).toFixed(1)}pp is not significant. This AI is not better than guessing the majority class.`;
+  }
+
+  const predictionPct = (result.currentPrediction * 100).toFixed(1);
+  const predictionLabel = result.currentPrediction > 0.6 ? 'BULLISH'
+                        : result.currentPrediction < 0.4 ? 'BEARISH'
+                        : 'NEUTRAL';
+  const predictionColor = result.currentPrediction > 0.6 ? 'var(--green)'
+                        : result.currentPrediction < 0.4 ? 'var(--red)'
+                        : 'var(--amber)';
+
+  let html = '<div class="panel">';
+  html += `<h2 style="margin-top:0">${result.symbol} — ${result.interval}</h2>`;
+  html += '<div class="grid">';
+  html += `<div class="stat"><div class="k">ACCURACY</div><div class="v ${result.avgAcc > 0.55 ? 'pass' : 'fail'}">${(result.avgAcc * 100).toFixed(1)}%</div></div>`;
+  html += `<div class="stat"><div class="k">BASELINE</div><div class="v">${(result.baseline * 100).toFixed(1)}%</div></div>`;
+  html += `<div class="stat"><div class="k">EDGE</div><div class="v ${result.edge > 0.02 ? 'pass' : result.edge > 0 ? 'warn' : 'fail'}">${result.edge > 0 ? '+' : ''}${(result.edge * 100).toFixed(1)}pp</div></div>`;
+  html += `<div class="stat"><div class="k">PRECISION</div><div class="v">${(result.avgPrec * 100).toFixed(1)}%</div></div>`;
+  html += `<div class="stat"><div class="k">RECALL</div><div class="v">${(result.avgRec * 100).toFixed(1)}%</div></div>`;
+  html += `<div class="stat"><div class="k">F1 SCORE</div><div class="v">${(result.avgF1 * 100).toFixed(1)}%</div></div>`;
+  html += `<div class="stat"><div class="k">SAMPLES</div><div class="v">${result.totalSamples}</div></div>`;
+  html += `<div class="stat"><div class="k">POSITIVE RATE</div><div class="v">${(result.positives / result.totalSamples * 100).toFixed(1)}%</div></div>`;
+  html += '</div>';
+
+  html += `<div class="verdict ${verdictClass}">${verdictText}<div style="font-size:11px;font-weight:400;margin-top:6px;opacity:.85">${verdictDetail}</div></div>`;
+
+  html += '<h2>Per-Split Results</h2>';
+  for (let i = 0; i < result.splits.length; i++) {
+    const s = result.splits[i];
+    const cls = s.accuracy > 0.52 ? 'pass' : s.accuracy > 0.5 ? 'warn' : 'fail';
+    html += `<div class="row"><span class="lbl">Split ${i + 1} (n=${s.total})</span><span class="val ${cls}">${(s.accuracy * 100).toFixed(1)}%</span></div>`;
+  }
+
+  html += '<h2>Top Features</h2>';
+  const maxImp = Math.max(...result.topFeatures.map(f => f.value)) || 1;
+  for (const f of result.topFeatures) {
+    if (f.value === 0) continue;
+    const barW = (f.value / maxImp * 100).toFixed(0);
+    html += `<div class="row"><span class="lbl">${f.name}</span><span class="val">${f.value.toFixed(1)}</span></div>`;
+    html += `<div style="height:4px;background:var(--card2);border-radius:2px;margin-bottom:6px"><div style="height:100%;width:${barW}%;background:var(--cyan);border-radius:2px"></div></div>`;
+  }
+
+  html += '<h2>Current Prediction</h2>';
+  html += `<div class="stat" style="background:transparent;padding:0"><div class="k">P(UP)</div><div class="v" style="color:${predictionColor};font-size:22px">${predictionPct}% ${predictionLabel}</div></div>`;
+  html += `<div class="row"><span class="lbl">Price</span><span class="val">${result.currentPrice.toFixed(4)}</span></div>`;
+  html += `<div class="row"><span class="lbl">Bar time</span><span class="val">${new Date(result.lastBarTime).toLocaleString()}</span></div>`;
+
+  html += '<h2>Interpretation</h2>';
+  if (result.edge > 0.02) {
+    html += '<pre style="color:var(--green)">The model consistently beats baseline across walk-forward splits.\nThis means the features contain real predictive signal.\nYou can build a signal engine on top of this AI.</pre>';
+  } else if (result.edge > 0) {
+    html += '<pre style="color:var(--amber)">The model is barely better than baseline.\nThe current features are too weak or too noisy.\nTry: longer training window, different labels, or additional features (funding rate, BTC dominance, regime).</pre>';
+  } else {
+    html += '<pre style="color:var(--red)">The model does NOT beat baseline.\nThis means the current features do not contain predictive signal for this symbol.\nDo not build on this AI yet. Improve features or labels first.</pre>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+/* ================================================================
+   SECTION 14: BOOT
+   ================================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  Log.init();
+  Log.write('AI Core Engine ready', 'pass');
+  Log.write('Click a test button above to train and validate', 'info');
+  Log.write('The self-test uses real Binance data and reports honest accuracy', 'info');
+});
 </script>
 </body>
 </html>
