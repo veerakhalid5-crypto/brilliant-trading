@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#080a0f">
-<title>Confluence AI Engine v2</title>
+<title>Confluence AI Engine v3</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{
@@ -248,15 +248,10 @@ nav button.on::after{content:'';position:absolute;top:0;left:30%;right:30%;heigh
   <button id="btnRefresh" class="bigbtn">Rescan Now</button>
   <button id="btnTest" class="ghostbtn">Run Connection Test</button>
   <p class="fineprint">
-    <b>Engine modules:</b> Order Flow (taker buy/sell from klines field 9, cumulative delta, absorption, exhaustion),
-    SMC (order blocks, FVG, BOS/CHoCH, liquidity sweeps, premium/discount),
-    ICT (kill zones, Judas swing, turtle soup, power of 3, OTE),
-    Wyckoff (phase detection, spring, upthrust),
-    Manipulation (stop-hunt forensics, wick analysis, iceberg proxy),
-    <b>Fundamentals</b> (market cap, TVL, developer activity, community stats),
-    <b>News & Sentiment</b> (live headlines from 300+ sources, sentiment scoring),
-    <b>AI</b> (per-symbol online logistic regression trained on 300+ bars, fused with fundamentals + news sentiment).
-    Data: Binance klines (CORS-safe), cryptocurrency.cv news API (CORS-enabled), DefiLlama TVL (CORS-enabled), CoinGecko (CORS-enabled).
+    <b>Engine v3 — Advanced Ensemble AI:</b> Random Forest + Gradient Boosting + Logistic Regression + Meta-Labeling.
+    <b>Labeling:</b> Triple-Barrier method (profit target, stop loss, time limit).
+    <b>Features:</b> Order Flow (taker buy/sell, delta, absorption, exhaustion), SMC (OB, FVG, BOS/CHoCH, sweeps), ICT (kill zones, Judas, turtle soup, power of 3, OTE), Wyckoff (phase, spring, upthrust), Manipulation (stop hunts, spoofing proxies, icebergs), Fundamentals (market cap, TVL, dev activity, community), Sentiment (news NLP scoring), Fear & Greed Index.
+    <b>Data:</b> Binance klines, cryptocurrency.cv news, DefiLlama TVL, CoinGecko, alternative.me F&G.
   </p>
   <div id="debug">ready</div>
 </section>
@@ -274,8 +269,8 @@ nav button.on::after{content:'';position:absolute;top:0;left:30%;right:30%;heigh
 
 <script>
 /* ================================================================
-   CONFLUENCE AI ENGINE v2
-   Now with Fundamentals + News + Sentiment
+   CONFLUENCE AI ENGINE v3
+   Advanced Ensemble + Meta-Labeling + Triple-Barrier
    ================================================================ */
 
 /* ---------------- CONFIG ---------------- */
@@ -290,19 +285,20 @@ const DEFAULTS = {
   eqTolPct: 0.0015,
   scanTfs: ["1h","4h"],
   refreshMs: 180000,
-  klinesLimit: 300,
+  klinesLimit: 500, // Need more bars for robust training
   concurrency: 6,
-  trainWindow: 250,
+  trainWindow: 400, // Larger window for ensemble
   base: "https://data-api.binance.vision",
   newsApi: "https://cryptocurrency.cv/api/news",
   defiLlamaApi: "https://api.llama.fi",
-  coinGeckoApi: "https://api.coingecko.com/api/v3"
+  coinGeckoApi: "https://api.coingecko.com/api/v3",
+  fngApi: "https://api.alternative.me/fng/?limit=1"
 };
 let CFG = Object.assign({}, DEFAULTS);
-try { Object.assign(CFG, JSON.parse(localStorage.getItem("cai_cfg_v2") || "{}")); } catch(e) {}
+try { Object.assign(CFG, JSON.parse(localStorage.getItem("cai_cfg_v3") || "{}")); } catch(e) {}
 function saveCfg() {
   try {
-    localStorage.setItem("cai_cfg_v2", JSON.stringify({
+    localStorage.setItem("cai_cfg_v3", JSON.stringify({
       topN: CFG.topN, minProb: CFG.minProb, minScore: CFG.minScore,
       volMult: CFG.volMult, scanTfs: CFG.scanTfs
     }));
@@ -326,9 +322,10 @@ const STATE = {
   lastUniverseMs: 0,
   scanDone: 0,
   scanTotal: 0,
-  fundamentals: {},   // symbol -> { marketCap, tvl, devActivity, community, ... }
-  newsCache: {},     // symbol -> articles[]
-  sentimentCache: {} // symbol -> { score, label }
+  fundamentals: {},
+  newsCache: {},
+  sentimentCache: {},
+  fearGreed: { value: 50, label: "Neutral" }
 };
 
 const $ = id => document.getElementById(id);
@@ -415,12 +412,11 @@ async function loadUniverse() {
 }
 
 /* ================================================================
-   FUNDAMENTALS FETCHER
+   FUNDAMENTALS & NEWS FETCHERS
    ================================================================ */
 async function fetchFundamentals(symbol, base) {
   const result = { marketCap: null, tvl: null, devActivity: null, community: null, supply: null };
   try {
-    // CoinGecko for market cap, supply, community
     const coinId = await mapToCoinGeckoId(base);
     if (coinId) {
       const cg = await getJSON(`${CFG.coinGeckoApi}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=true&developer_data=true&sparkline=false`, 3600000);
@@ -439,8 +435,7 @@ async function fetchFundamentals(symbol, base) {
         result.devActivity = {
           stars: cg.developer_data.stars || 0,
           forks: cg.developer_data.forks || 0,
-          commits: cg.developer_data.commit_count_4_weeks || 0,
-          contributors: cg.developer_data.pull_requests_merged || 0
+          commits: cg.developer_data.commit_count_4_weeks || 0
         };
       }
     }
@@ -448,22 +443,18 @@ async function fetchFundamentals(symbol, base) {
     log("fundamentals " + symbol + ": " + e.message, "warn");
   }
 
-  // DefiLlama TVL if DeFi
   try {
     const defiSlug = mapToDefiLlamaSlug(base);
     if (defiSlug) {
       const tvl = await getJSON(`${CFG.defiLlamaApi}/tvl/${defiSlug}`, 3600000);
       if (typeof tvl === 'number') result.tvl = tvl;
     }
-  } catch(e) {
-    // Not a DeFi protocol, ignore
-  }
+  } catch(e) { /* not a DeFi token */ }
 
   return result;
 }
 
 async function mapToCoinGeckoId(base) {
-  // Map common symbols to CoinGecko IDs
   const map = {
     BTC:"bitcoin", ETH:"ethereum", BNB:"binancecoin", SOL:"solana",
     XRP:"ripple", ADA:"cardano", DOGE:"dogecoin", AVAX:"avalanche-2",
@@ -491,21 +482,14 @@ function mapToDefiLlamaSlug(base) {
   return map[base] || null;
 }
 
-/* ================================================================
-   NEWS FETCHER
-   ================================================================ */
 async function fetchNews(symbol, base) {
   try {
     const q = base.toLowerCase();
     const url = `${CFG.newsApi}?q=${encodeURIComponent(q)}&limit=15`;
-    const data = await getJSON(url, 300000); // 5 min cache
+    const data = await getJSON(url, 300000);
     const articles = (data.articles || []).map(a => ({
-      title: a.title,
-      link: a.link,
-      description: a.description,
-      pubDate: a.pubDate,
-      source: a.source,
-      timeAgo: a.timeAgo
+      title: a.title, link: a.link, description: a.description,
+      pubDate: a.pubDate, source: a.source, timeAgo: a.timeAgo
     }));
     STATE.newsCache[symbol] = articles;
     return articles;
@@ -514,6 +498,17 @@ async function fetchNews(symbol, base) {
     STATE.newsCache[symbol] = [];
     return [];
   }
+}
+
+async function fetchFearGreed() {
+  try {
+    const data = await getJSON(CFG.fngApi, 3600000);
+    if (data.data && data.data[0]) {
+      const v = parseInt(data.data[0].value);
+      const label = data.data[0].value_classification;
+      STATE.fearGreed = { value: v, label };
+    }
+  } catch(e) { log("fear & greed: " + e.message, "warn"); }
 }
 
 function scoreSentiment(articles) {
@@ -531,14 +526,12 @@ function scoreSentiment(articles) {
   const score = (bull - bear) / total;
   return {
     score: Math.round(score * 100),
-    label: score > 0.2 ? "BULLISH" : score < -0.2 ? "BEARISH" : "NEUTRAL",
-    bullCount: bull,
-    bearCount: bear
+    label: score > 0.2 ? "BULLISH" : score < -0.2 ? "BEARISH" : "NEUTRAL"
   };
 }
 
 /* ================================================================
-   MATH / STATISTICS (same as before, plus new helpers)
+   MATH / STATISTICS
    ================================================================ */
 const sum = a => a.reduce((s,x)=>s+x,0);
 const mean = a => a.length ? sum(a)/a.length : 0;
@@ -607,7 +600,7 @@ function vwapSeries(h, l, c, v) {
 }
 
 /* ================================================================
-   SWINGS / STRUCTURE (same)
+   SWINGS / STRUCTURE
    ================================================================ */
 function findSwings(h, l, n) {
   const sh = [], sl = [];
@@ -643,7 +636,7 @@ function clusterLevels(swings, tol) {
 }
 
 /* ================================================================
-   ICT MODULE (same)
+   ICT MODULE
    ================================================================ */
 function ictContext(nowUtc = new Date()) {
   const h = nowUtc.getUTCHours();
@@ -716,7 +709,7 @@ function optimalTradeEntry(o, h, l, c, last, swings) {
 }
 
 /* ================================================================
-   WYCKOFF MODULE (same)
+   WYCKOFF MODULE
    ================================================================ */
 function wyckoffPhase(o, h, l, c, v, last, look = 30) {
   if (last < look) return { phase: "UNKNOWN", conf: 0 };
@@ -745,7 +738,7 @@ function wyckoffPhase(o, h, l, c, v, last, look = 30) {
 }
 
 /* ================================================================
-   ORDER FLOW MODULE (same)
+   ORDER FLOW MODULE
    ================================================================ */
 function orderFlowMetrics(vol, trades, tb, last) {
   const window = Math.min(20, last);
@@ -822,7 +815,7 @@ function detectDeltaDivergence(c, deltaSeries) {
 }
 
 /* ================================================================
-   MANIPULATION MODULE (same)
+   MANIPULATION MODULE
    ================================================================ */
 function manipulationScore(o, h, l, c, v, tb, last, swings) {
   const body = Math.abs(c[last] - o[last]) || 1e-9;
@@ -886,7 +879,7 @@ function manipulationScore(o, h, l, c, v, tb, last, swings) {
 }
 
 /* ================================================================
-   SMC MODULE (same)
+   SMC MODULE
    ================================================================ */
 function smcContext(o, h, l, c, last, swings) {
   const { sh, sl } = swings;
@@ -959,9 +952,314 @@ function smcContext(o, h, l, c, last, swings) {
 }
 
 /* ================================================================
-   FEATURE EXTRACTION FOR AI — NOW INCLUDES FUNDAMENTALS + SENTIMENT
+   ADVANCED AI CORE v3 — Ensemble + Meta-Labeling
    ================================================================ */
-function extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, sentiment) {
+
+// 1. Decision Tree (CART for classification)
+class DecisionTree {
+    constructor(maxDepth = 6, minSamples = 10) {
+        this.maxDepth = maxDepth;
+        this.minSamples = minSamples;
+        this.root = null;
+    }
+
+    fit(X, y) {
+        this.root = this._build(X, y, 0);
+    }
+
+    _build(X, y, depth) {
+        const n = X.length;
+        const numFeatures = X[0].length;
+        const counts = [0, 0];
+        for (const label of y) counts[label]++;
+        
+        if (depth >= this.maxDepth || n < this.minSamples || counts[0] === 0 || counts[1] === 0) {
+            return { leaf: true, prob: counts[1] / n };
+        }
+
+        let bestGain = 0;
+        let bestFeature = -1;
+        let bestThreshold = 0;
+        const parentGini = 1 - (counts[0]/n)**2 - (counts[1]/n)**2;
+
+        for (let f = 0; f < numFeatures; f++) {
+            const values = X.map(row => row[f]);
+            const unique = [...new Set(values)].sort((a,b)=>a-b);
+            const step = Math.max(1, Math.floor(unique.length / 20));
+            for (let i = step; i < unique.length; i += step) {
+                const thresh = unique[i];
+                const leftIdx = [], rightIdx = [];
+                for (let j = 0; j < n; j++) {
+                    if (X[j][f] <= thresh) leftIdx.push(j);
+                    else rightIdx.push(j);
+                }
+                if (leftIdx.length < this.minSamples || rightIdx.length < this.minSamples) continue;
+
+                const leftCounts = [0,0], rightCounts = [0,0];
+                for (const idx of leftIdx) leftCounts[y[idx]]++;
+                for (const idx of rightIdx) rightCounts[y[idx]]++;
+
+                const leftGini = 1 - (leftCounts[0]/leftIdx.length)**2 - (leftCounts[1]/leftIdx.length)**2;
+                const rightGini = 1 - (rightCounts[0]/rightIdx.length)**2 - (rightCounts[1]/rightIdx.length)**2;
+                const weightedGini = (leftIdx.length/n)*leftGini + (rightIdx.length/n)*rightGini;
+                const gain = parentGini - weightedGini;
+
+                if (gain > bestGain) {
+                    bestGain = gain;
+                    bestFeature = f;
+                    bestThreshold = thresh;
+                }
+            }
+        }
+
+        if (bestGain === 0) {
+            return { leaf: true, prob: counts[1] / n };
+        }
+
+        const leftX = [], leftY = [], rightX = [], rightY = [];
+        for (let i = 0; i < n; i++) {
+            if (X[i][bestFeature] <= bestThreshold) {
+                leftX.push(X[i]); leftY.push(y[i]);
+            } else {
+                rightX.push(X[i]); rightY.push(y[i]);
+            }
+        }
+
+        return {
+            leaf: false,
+            feature: bestFeature,
+            threshold: bestThreshold,
+            left: this._build(leftX, leftY, depth + 1),
+            right: this._build(rightX, rightY, depth + 1)
+        };
+    }
+
+    predictProba(x) {
+        let node = this.root;
+        while (!node.leaf) {
+            if (x[node.feature] <= node.threshold) node = node.left;
+            else node = node.right;
+        }
+        return node.prob;
+    }
+}
+
+// 2. Random Forest
+class RandomForest {
+    constructor(nTrees = 30, maxDepth = 6, minSamples = 8) {
+        this.nTrees = nTrees;
+        this.maxDepth = maxDepth;
+        this.minSamples = minSamples;
+        this.trees = [];
+    }
+
+    fit(X, y) {
+        this.trees = [];
+        const n = X.length;
+        for (let i = 0; i < this.nTrees; i++) {
+            const indices = [];
+            for (let j = 0; j < n; j++) indices.push(Math.floor(Math.random() * n));
+            const Xb = indices.map(idx => X[idx]);
+            const yb = indices.map(idx => y[idx]);
+            const tree = new DecisionTree(this.maxDepth, this.minSamples);
+            tree.fit(Xb, yb);
+            this.trees.push(tree);
+        }
+    }
+
+    predictProba(x) {
+        let sum = 0;
+        for (const tree of this.trees) {
+            sum += tree.predictProba(x);
+        }
+        return sum / this.trees.length;
+    }
+}
+
+// 3. Gradient Boosting (Simplified for binary classification)
+class GradientBoosting {
+    constructor(nEstimators = 30, learningRate = 0.1, maxDepth = 4) {
+        this.nEstimators = nEstimators;
+        this.lr = learningRate;
+        this.maxDepth = maxDepth;
+        this.trees = [];
+        this.basePred = 0;
+    }
+
+    fit(X, y) {
+        const n = X.length;
+        const pos = y.filter(v => v === 1).length;
+        this.basePred = Math.log(pos / (n - pos));
+        let preds = new Array(n).fill(this.basePred);
+
+        for (let m = 0; m < this.nEstimators; m++) {
+            const residuals = [];
+            for (let i = 0; i < n; i++) {
+                const p = 1 / (1 + Math.exp(-preds[i]));
+                residuals.push(y[i] - p);
+            }
+            const tree = this._buildRegressionTree(X, residuals, 0);
+            this.trees.push(tree);
+            for (let i = 0; i < n; i++) {
+                preds[i] += this.lr * this._predictTree(tree, X[i]);
+            }
+        }
+    }
+
+    _buildRegressionTree(X, residuals, depth) {
+        const n = X.length;
+        const numFeatures = X[0].length;
+        if (depth >= this.maxDepth || n < 10) {
+            return { leaf: true, value: residuals.reduce((a,b)=>a+b,0)/n };
+        }
+
+        let bestGain = 0, bestFeature = -1, bestThreshold = 0;
+        const parentVar = residuals.reduce((s, r) => s + r*r, 0) / n;
+
+        for (let f = 0; f < numFeatures; f++) {
+            const values = X.map(row => row[f]);
+            const unique = [...new Set(values)].sort((a,b)=>a-b);
+            const step = Math.max(1, Math.floor(unique.length / 10));
+            for (let i = step; i < unique.length; i += step) {
+                const thresh = unique[i];
+                const leftIdx = [], rightIdx = [];
+                for (let j = 0; j < n; j++) {
+                    if (X[j][f] <= thresh) leftIdx.push(j);
+                    else rightIdx.push(j);
+                }
+                if (leftIdx.length < 5 || rightIdx.length < 5) continue;
+
+                const leftMean = leftIdx.reduce((s, idx) => s + residuals[idx], 0) / leftIdx.length;
+                const rightMean = rightIdx.reduce((s, idx) => s + residuals[idx], 0) / rightIdx.length;
+                const leftVar = leftIdx.reduce((s, idx) => s + (residuals[idx] - leftMean)**2, 0) / leftIdx.length;
+                const rightVar = rightIdx.reduce((s, idx) => s + (residuals[idx] - rightMean)**2, 0) / rightIdx.length;
+                const weightedVar = (leftIdx.length/n)*leftVar + (rightIdx.length/n)*rightVar;
+                const gain = parentVar - weightedVar;
+
+                if (gain > bestGain) {
+                    bestGain = gain;
+                    bestFeature = f;
+                    bestThreshold = thresh;
+                }
+            }
+        }
+
+        if (bestGain === 0) {
+            return { leaf: true, value: residuals.reduce((a,b)=>a+b,0)/n };
+        }
+
+        const leftX = [], leftR = [], rightX = [], rightR = [];
+        for (let i = 0; i < n; i++) {
+            if (X[i][bestFeature] <= bestThreshold) {
+                leftX.push(X[i]); leftR.push(residuals[i]);
+            } else {
+                rightX.push(X[i]); rightR.push(residuals[i]);
+            }
+        }
+
+        return {
+            leaf: false,
+            feature: bestFeature,
+            threshold: bestThreshold,
+            left: this._buildRegressionTree(leftX, leftR, depth + 1),
+            right: this._buildRegressionTree(rightX, rightR, depth + 1)
+        };
+    }
+
+    _predictTree(node, x) {
+        while (!node.leaf) {
+            if (x[node.feature] <= node.threshold) node = node.left;
+            else node = node.right;
+        }
+        return node.value;
+    }
+
+    predictProba(x) {
+        let pred = this.basePred;
+        for (const tree of this.trees) {
+            pred += this.lr * this._predictTree(tree, x);
+        }
+        return 1 / (1 + Math.exp(-pred));
+    }
+}
+
+// 4. Logistic Regression
+class LogisticRegression {
+    constructor(lr = 0.1, epochs = 200, l2 = 0.01) {
+        this.lr = lr;
+        this.epochs = epochs;
+        this.l2 = l2;
+        this.weights = null;
+    }
+
+    fit(X, y) {
+        const n = X.length, d = X[0].length;
+        this.weights = new Array(d).fill(0);
+        const sigmoid = z => 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
+        
+        for (let e = 0; e < this.epochs; e++) {
+            for (let i = 0; i < n; i++) {
+                let z = 0;
+                for (let j = 0; j < d; j++) z += this.weights[j] * X[i][j];
+                const p = sigmoid(z);
+                const err = p - y[i];
+                for (let j = 0; j < d; j++) {
+                    this.weights[j] -= this.lr * (err * X[i][j] + this.l2 * this.weights[j]);
+                }
+            }
+        }
+    }
+
+    predictProba(x) {
+        let z = 0;
+        for (let j = 0; j < x.length; j++) z += this.weights[j] * x[j];
+        return 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
+    }
+}
+
+// 5. Ensemble Model with Meta-Labeling
+class EnsembleModel {
+    constructor() {
+        this.rf = new RandomForest(20, 6, 8);
+        this.gb = new GradientBoosting(20, 0.1, 4);
+        this.lr = new LogisticRegression(0.1, 150, 0.01);
+        this.meta = null;
+    }
+
+    fit(X, y) {
+        this.rf.fit(X, y);
+        this.gb.fit(X, y);
+        this.lr.fit(X, y);
+        
+        // Meta-labeler: train on predictions
+        const preds = X.map(x => this.predictPrimary(x));
+        // Meta features: primary prob + a few key features for context
+        const metaX = X.map((x, i) => [1, preds[i], x[1], x[2], x[3]]); // bias, prob, volMult, bodyATR, cPos
+        const metaY = y;
+        this.meta = new LogisticRegression(0.05, 100, 0.01);
+        this.meta.fit(metaX, metaY);
+    }
+
+    predictPrimary(x) {
+        const pRF = this.rf.predictProba(x);
+        const pGB = this.gb.predictProba(x);
+        const pLR = this.lr.predictProba(x);
+        return (pRF * 0.4 + pGB * 0.4 + pLR * 0.2);
+    }
+
+    predictProba(x) {
+        const pPrimary = this.predictPrimary(x);
+        if (!this.meta) return pPrimary;
+        const metaX = [1, pPrimary, x[1], x[2], x[3]];
+        const pMeta = this.meta.predictProba(metaX);
+        return pPrimary * pMeta;
+    }
+}
+
+/* ================================================================
+   FEATURE EXTRACTION
+   ================================================================ */
+function extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, sentiment, fearGreed) {
   const A = atr[last];
   if (!isFinite(A) || A <= 0) return null;
   const volBase = smaAt(v, last-1, 20);
@@ -973,15 +1271,15 @@ function extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, se
   const htfUp = c[last] > ref20 ? 1 : 0;
   const htfDn = c[last] < ref20 ? 1 : 0;
 
-  // Fundamental features (normalized)
+  // Fundamental features
   const mcap = fundamentals?.marketCap || 0;
   const tvl = fundamentals?.tvl || 0;
-  const tvlRatio = mcap > 0 ? tvl/mcap : 0;  // TVL to market cap ratio
+  const tvlRatio = mcap > 0 ? tvl/mcap : 0;
   const devCommits = fundamentals?.devActivity?.commits || 0;
   const communityScore = ((fundamentals?.community?.twitter || 0) / 1e6) + ((fundamentals?.community?.reddit || 0) / 1e6);
 
-  // Sentiment feature
   const sentScore = sentiment?.score || 0;
+  const fgValue = fearGreed.value || 50;
 
   return [
     1, // bias
@@ -1004,76 +1302,69 @@ function extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, se
     smc.inDiscount ? 1 : 0,
     smc.inPremium ? 1 : 0,
     htfUp, htfDn,
-    // NEW fundamental + sentiment features
-    Math.tanh(tvlRatio),  // squashed
+    Math.tanh(tvlRatio),
     Math.tanh(devCommits / 100),
     Math.tanh(communityScore),
-    sentScore / 100
+    sentScore / 100,
+    fgValue / 100
   ];
 }
 
 /* ================================================================
-   AI: ONLINE LOGISTIC REGRESSION
+   TRIPLE-BARRIER LABELING
    ================================================================ */
-function trainLogistic(X, y, opts) {
-  const o = Object.assign({lr:0.1, epochs:150, l2:0.001}, opts||{});
-  const n = X.length, d = X[0].length;
-  const w = new Array(d).fill(0);
-  const sig = z => 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
-  let loss = 0;
-  for (let e = 0; e < o.epochs; e++) {
-    loss = 0;
-    for (let i = 0; i < n; i++) {
-      let z = 0;
-      for (let j = 0; j < d; j++) z += w[j]*X[i][j];
-      const p = sig(z);
-      const err = p - y[i];
-      loss += -(y[i]*Math.log(p+1e-9) + (1-y[i])*Math.log(1-p+1e-9));
-      for (let j = 0; j < d; j++) {
-        w[j] -= o.lr * (err*X[i][j] + o.l2*w[j]);
-      }
+function tripleBarrierLabel(c, atr, i, profitMult = 1.5, stopMult = 1.0, maxHold = 6) {
+    const entry = c[i];
+    const upper = entry + atr[i] * profitMult;
+    const lower = entry - atr[i] * stopMult;
+    for (let j = i + 1; j <= Math.min(i + maxHold, c.length - 1); j++) {
+        if (c[j] >= upper) return 1; // Success
+        if (c[j] <= lower) return 0; // Failure
     }
-  }
-  return { w, loss: loss/n };
-}
-function predictProb(w, x) {
-  let z = 0;
-  for (let j = 0; j < w.length; j++) z += w[j]*x[j];
-  return 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
+    return 0; // Time barrier hit, treat as failure for long
 }
 
-function buildTrainingData(o, h, l, c, v, tb, atr, fundamentals, sentiment) {
+/* ================================================================
+   TRAINING DATA BUILDER
+   ================================================================ */
+function buildTrainingData(o, h, l, c, v, tb, atr, fundamentals, sentiment, fearGreed) {
   const X = [], y = [];
   const start = Math.max(60, c.length - CFG.trainWindow);
   for (let i = start; i < c.length - 6; i++) {
     const swings = findSwings(h.slice(0, i+1), l.slice(0, i+1), 2);
     const smc = smcContext(o, h, l, c, i, swings);
     const of = orderFlowMetrics(v, Array(c.length).fill(1), tb, i);
-    const f = extractFeatures(o, h, l, c, v, tb, i, atr, smc, of, fundamentals, sentiment);
+    const f = extractFeatures(o, h, l, c, v, tb, i, atr, smc, of, fundamentals, sentiment, fearGreed);
     if (!f) continue;
-    const future = c[i+6];
-    const label = future > c[i] + atr[i]*0.4 ? 1 : 0;
+    
+    // Triple-barrier label
+    const label = tripleBarrierLabel(c, atr, i);
     X.push(f);
     y.push(label);
   }
   return { X, y };
 }
 
-function getAIModel(symbol, o, h, l, c, v, tb, atr, fundamentals, sentiment) {
+function getAIModel(symbol, o, h, l, c, v, tb, atr, fundamentals, sentiment, fearGreed) {
   const cacheKey = symbol + "_" + c.length;
   if (STATE.aiModels[symbol] && STATE.aiModels[symbol].key === cacheKey) return STATE.aiModels[symbol];
-  const { X, y } = buildTrainingData(o, h, l, c, v, tb, atr, fundamentals, sentiment);
-  if (X.length < 60 || sum(y) === 0 || sum(y) === y.length) {
+  const { X, y } = buildTrainingData(o, h, l, c, v, tb, atr, fundamentals, sentiment, fearGreed);
+  if (X.length < 80 || sum(y) < 10 || sum(y) === y.length) {
     return { model: null, key: cacheKey, trainSize: X.length, accuracy: 0 };
   }
-  const m = trainLogistic(X, y);
+  
+  const ensemble = new EnsembleModel();
+  ensemble.fit(X, y);
+  
+  // Accuracy on training set (in-sample, for UI reference)
   let correct = 0;
   for (let i = 0; i < X.length; i++) {
-    const p = predictProb(m.w, X[i]);
+    const p = ensemble.predictProba(X[i]);
     if ((p > 0.5 ? 1 : 0) === y[i]) correct++;
   }
   const acc = correct / X.length;
-  const result = { model: m, key: cacheKey, trainSize: X.length, accuracy: acc };
+  
+  const result = { model: ensemble, key: cacheKey, trainSize: X.length, accuracy: acc };
   STATE.aiModels[symbol] = result;
   return result;
 }
@@ -1081,7 +1372,7 @@ function getAIModel(symbol, o, h, l, c, v, tb, atr, fundamentals, sentiment) {
 /* ================================================================
    MAIN ANALYZER
    ================================================================ */
-function analyze(kl, tf, symbol, fundamentals, sentiment) {
+function analyze(kl, tf, symbol, fundamentals, sentiment, fearGreed) {
   const n = kl.length;
   if (n < 100) return null;
 
@@ -1090,7 +1381,6 @@ function analyze(kl, tf, symbol, fundamentals, sentiment) {
   const l = kl.map(k => +k[3]);
   const c = kl.map(k => +k[4]);
   const v = kl.map(k => +k[5]);
-  const q = kl.map(k => +k[7]);
   const trades = kl.map(k => +k[8]);
   const tb = kl.map(k => +k[9]);
   const last = n-1;
@@ -1145,10 +1435,11 @@ function analyze(kl, tf, symbol, fundamentals, sentiment) {
     closePos: manip.cPos,
     fundamentals,
     sentiment,
+    fearGreed,
     score: 0, aiProb: 0, aiAcc: 0, tags: [], sig: null
   };
 
-  // Score
+  // --- SCORING (same as before, but can be adjusted) ---
   let score = 0;
   const tags = [];
   const add = (cond, pts, label, cls) => {
@@ -1185,32 +1476,31 @@ function analyze(kl, tf, symbol, fundamentals, sentiment) {
   add(!aboveVWAP, 3, "VWAP↓", "on");
   add(manip.score >= 40, Math.min(15, Math.round(manip.score/5)), "MANIP " + manip.score, "danger");
 
-  // NEW: Fundamental + sentiment tags
-  if (fundamentals?.tvl) {
-    add(fundamentals.tvl > 1e8, 3, "TVL", "on");
-  }
-  if (sentiment?.score > 20) {
-    add(true, 4, "SENT+", "on");
-  } else if (sentiment?.score < -20) {
-    add(true, 4, "SENT-", "bear");
-  }
+  // Fundamental/Sentiment tags
+  if (fundamentals?.tvl) add(fundamentals.tvl > 1e8, 3, "TVL", "on");
+  if (sentiment?.score > 20) add(true, 4, "SENT+", "on");
+  else if (sentiment?.score < -20) add(true, 4, "SENT-", "bear");
+  if (fearGreed.value > 60) add(true, 3, "F&G GREED", "on");
+  else if (fearGreed.value < 40) add(true, 3, "F&G FEAR", "bear");
 
   base.score = Math.round(score);
   base.tags = tags;
 
-  // AI probability — now uses fundamentals + sentiment
-  const aiRes = getAIModel(symbol, o, h, l, c, v, tb, atr, fundamentals, sentiment);
+  // --- AI PROBABILITY ---
+  const aiRes = getAIModel(symbol, o, h, l, c, v, tb, atr, fundamentals, sentiment, fearGreed);
   if (aiRes.model) {
-    const f = extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, sentiment);
+    const f = extractFeatures(o, h, l, c, v, tb, last, atr, smc, of, fundamentals, sentiment, fearGreed);
     if (f) {
-      base.aiProb = Math.round(predictProb(aiRes.model.w, f) * 100);
+      base.aiProb = Math.round(aiRes.model.predictProba(f) * 100);
       base.aiAcc = Math.round(aiRes.accuracy * 100);
     }
   }
 
+  // --- SIGNAL GATING ---
   if (base.score < CFG.minScore) return base;
   if (base.aiProb < CFG.minProb) return base;
 
+  // Direction vote (same as before)
   let bull = 0, bear = 0;
   if (of.buyRatio > 0.5) bull += Math.round((of.buyRatio-0.5)*30); else bear += Math.round((0.5-of.buyRatio)*30);
   if (of.delta > 0) bull += 2; else bear += 2;
@@ -1241,14 +1531,16 @@ function analyze(kl, tf, symbol, fundamentals, sentiment) {
   if (exhaust && exhaust.type === "EXHAUSTION_BEAR") bull += 2;
   if (div && div.type === "BULL_DIV") bull += 2;
   if (div && div.type === "BEAR_DIV") bear += 2;
-  // Sentiment bias
   if (sentiment?.score > 20) bull += 1;
   if (sentiment?.score < -20) bear += 1;
+  if (fearGreed.value > 60) bull += 1;
+  if (fearGreed.value < 40) bear += 1;
 
   if (bull === bear) return base;
 
   const dir = bull > bear ? "BULLISH" : "BEARISH";
 
+  // Vetoes
   if (dir === "BULLISH" && of.buyRatio < 0.42) return base;
   if (dir === "BEARISH" && of.buyRatio > 0.58) return base;
   if (dir === "BULLISH" && htfBear && !smc.chochBull) return base;
@@ -1284,7 +1576,7 @@ function analyze(kl, tf, symbol, fundamentals, sentiment) {
 }
 
 /* ================================================================
-   SCANNER (now fetches fundamentals + news)
+   SCANNER
    ================================================================ */
 function setProgress(p) {
   const i = $("progress").firstElementChild;
@@ -1301,33 +1593,26 @@ async function scan() {
       await loadUniverse();
     }
 
-    // Pre-fetch fundamentals and news for all pairs in background
-    const fundJobs = STATE.universe.map(u => ({
-      symbol: u.symbol,
-      base: u.base
-    }));
+    // Fetch Fear & Greed (global, not per symbol)
+    await fetchFearGreed();
 
-    // Fetch fundamentals (cached 1h)
-    const fundResults = await pool(fundJobs, async (j) => {
+    // Pre-fetch fundamentals and news
+    const fundJobs = STATE.universe.map(u => ({ symbol: u.symbol, base: u.base }));
+
+    await pool(fundJobs, async (j) => {
       try {
         const f = await fetchFundamentals(j.symbol, j.base);
         STATE.fundamentals[j.symbol] = f;
-        return f;
-      } catch(e) {
-        return {};
-      }
+      } catch(e) {}
     }, 4);
 
-    // Fetch news (cached 5min)
-    const newsResults = await pool(fundJobs, async (j) => {
+    await pool(fundJobs, async (j) => {
       try {
         const articles = await fetchNews(j.symbol, j.base);
         const sentiment = scoreSentiment(articles);
         STATE.sentimentCache[j.symbol] = sentiment;
-        return sentiment;
       } catch(e) {
         STATE.sentimentCache[j.symbol] = { score: 0, label: "NEUTRAL" };
-        return { score: 0, label: "NEUTRAL" };
       }
     }, 4);
 
@@ -1347,7 +1632,7 @@ async function scan() {
         const kl = await getJSON(url, 45000);
         const fund = STATE.fundamentals[j.symbol] || {};
         const sent = STATE.sentimentCache[j.symbol] || { score: 0, label: "NEUTRAL" };
-        const r = analyze(kl, j.tf, j.symbol, fund, sent);
+        const r = analyze(kl, j.tf, j.symbol, fund, sent, STATE.fearGreed);
         STATE.scanDone++;
         if (STATE.scanDone % 5 === 0) {
           setProgress(STATE.scanDone / STATE.scanTotal);
@@ -1472,13 +1757,9 @@ function renderResearch() {
     return;
   }
   const keyMap = {
-    prob: r => r.aiProb,
-    score: r => r.score,
-    delta: r => Math.abs(r.delta),
-    buyratio: r => Math.abs(r.buyRatio - 0.5),
-    vol: r => r.volMult,
-    atr: r => r.atrPct,
-    manip: r => r.manipScore
+    prob: r => r.aiProb, score: r => r.score, delta: r => Math.abs(r.delta),
+    buyratio: r => Math.abs(r.buyRatio - 0.5), vol: r => r.volMult,
+    atr: r => r.atrPct, manip: r => r.manipScore
   };
   const key = keyMap[sort] || keyMap.prob;
   rows.sort((a,b) => key(b) - key(a));
@@ -1524,6 +1805,7 @@ function renderResearchDetail(symbol) {
   const fund = STATE.fundamentals[symbol] || {};
   const news = STATE.newsCache[symbol] || [];
   const sent = STATE.sentimentCache[symbol] || { score: 0, label: "NEUTRAL" };
+  const fg = STATE.fearGreed;
 
   const sentCls = sent.label === "BULLISH" ? "bull" : sent.label === "BEARISH" ? "bear" : "neu";
 
@@ -1536,6 +1818,7 @@ function renderResearchDetail(symbol) {
   html += '<div class="rstat"><div class="k">TVL</div><div class="v">' + (fund.tvl ? '$' + fmt(fund.tvl) : '—') + '</div></div>';
   html += '<div class="rstat"><div class="k">DEV COMMITS (4w)</div><div class="v">' + (fund.devActivity?.commits || '—') + '</div></div>';
   html += '<div class="rstat"><div class="k">SENTIMENT</div><div class="v"><span class="sentiment ' + sentCls + '">' + sent.label + ' (' + sent.score + ')</span></div></div>';
+  html += '<div class="rstat"><div class="k">FEAR & GREED</div><div class="v">' + fg.value + ' (' + fg.label + ')</div></div>';
   html += '</div>';
 
   // Community stats
@@ -1623,7 +1906,7 @@ function renderAI() {
   const el = $("aiPanel");
   const rows = Object.values(STATE.results).filter(r => r.aiAcc > 0);
   if (!rows.length) {
-    el.innerHTML = '<div class="empty">AI models training…<br>Models require at least 60 training samples per symbol. Check back after the first scan.</div>';
+    el.innerHTML = '<div class="empty">AI models training…<br>Models require at least 80 training samples per symbol. Check back after the first scan.</div>';
     return;
   }
   rows.sort((a,b) => b.aiProb - a.aiProb);
@@ -1847,7 +2130,6 @@ document.addEventListener("DOMContentLoaded", () => {
     b.classList.toggle("on", CFG.scanTfs.includes(b.dataset.tf));
   });
 
-  // boot
   (async function boot() {
     log("boot start", "info");
     try {
@@ -1871,7 +2153,8 @@ async function connectionTest() {
     { name: "binance-klines",    url: CFG.base + "/api/v3/klines?symbol=" + sym + "&interval=1h&limit=5" },
     { name: "crypto-news",       url: CFG.newsApi + "?q=bitcoin&limit=3" },
     { name: "defillama",         url: CFG.defiLlamaApi + "/protocols" },
-    { name: "coingecko",         url: CFG.coinGeckoApi + "/ping" }
+    { name: "coingecko",         url: CFG.coinGeckoApi + "/ping" },
+    { name: "fear-greed",        url: CFG.fngApi }
   ];
   for (const ep of endpoints) {
     try {
@@ -1884,7 +2167,7 @@ async function connectionTest() {
       log(ep.name + ": FAILED — " + e.message + " (CORS or network)", "fail");
     }
   }
-  log("binance-klines is used for price/volume/order flow. crypto-news is used for headlines and sentiment. defillama + coingecko are used for fundamentals (TVL, market cap, developer activity, community).", "warn");
+  log("All endpoints feed the ensemble. If any fail, the engine degrades gracefully but may miss fundamental context.", "warn");
 }
 </script>
 </body>
