@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trading Decision Engine</title>
+<title>Advanced Decision Engine</title>
 <style>
 :root{--bg:#080a0f;--card:#12171f;--card2:#171d27;--line:#1f2733;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--cyan:#06b6d4;--purple:#a855f7;--text:#e8ecf1;--muted:#7a8698;--dim:#4b5563}
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -31,7 +31,7 @@ h2{font-size:11px;color:var(--cyan);margin:14px 0 8px;letter-spacing:1px;font-we
 .verdict.buy{background:rgba(14,203,129,.12);border:2px solid var(--green)}
 .verdict.sell{background:rgba(246,70,93,.12);border:2px solid var(--red)}
 .verdict.wait{background:rgba(240,185,11,.12);border:2px solid var(--amber)}
-.verdict .action{font-size:32px;font-weight:900;letter-spacing:4px;margin-bottom:4px}
+.verdict .action{font-size:34px;font-weight:900;letter-spacing:4px;margin-bottom:4px}
 .verdict.buy .action{color:var(--green)}
 .verdict.sell .action{color:var(--red)}
 .verdict.wait .action{color:var(--amber)}
@@ -54,19 +54,29 @@ h2{font-size:11px;color:var(--cyan);margin:14px 0 8px;letter-spacing:1px;font-we
 .liq-type{font-size:9.5px;padding:2px 6px;border-radius:3px;margin-left:6px;font-weight:700}
 .liq-type.bsl{background:rgba(14,203,129,.15);color:var(--green)}
 .liq-type.ssl{background:rgba(246,70,93,.15);color:var(--red)}
-.liq-type.long-liq{background:rgba(246,70,93,.1);color:var(--red);border:1px dashed rgba(246,70,93,.3)}
-.liq-type.short-liq{background:rgba(14,203,129,.1);color:var(--green);border:1px dashed rgba(14,203,129,.3)}
-#log{background:#05070b;border:1px solid var(--line);border-radius:6px;padding:8px;max-height:100px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.6;color:var(--muted)}
+.tf-table{width:100%;border-collapse:collapse;font-size:11px}
+.tf-table th{text-align:left;padding:6px 4px;color:var(--muted);font-size:9.5px;font-weight:700;border-bottom:1px solid var(--line);text-transform:uppercase}
+.tf-table td{padding:6px 4px;border-bottom:1px solid var(--line);font-family:ui-monospace,Menlo,monospace}
+.tf-table tr:last-child td{border-bottom:none}
+.tf-bull{color:var(--green);font-weight:700}
+.tf-bear{color:var(--red);font-weight:700}
+.tf-neutral{color:var(--muted)}
+.depth-bar{height:6px;background:var(--card2);border-radius:3px;overflow:hidden;display:flex;margin:4px 0}
+.depth-bar .bid{background:var(--green);height:100%}
+.depth-bar .ask{background:var(--red);height:100%}
+#log{background:#05070b;border:1px solid var(--line);border-radius:6px;padding:8px;max-height:120px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:10px;line-height:1.6;color:var(--muted)}
 .tag{display:inline-block;font-size:9.5px;padding:2px 6px;border-radius:4px;background:var(--card2);color:var(--dim);font-weight:600;margin-right:4px;margin-bottom:4px}
 .tag.on{background:rgba(14,203,129,.14);color:var(--green)}
 .tag.danger{background:rgba(246,70,93,.14);color:var(--red)}
 .tag.warn{background:rgba(240,185,11,.14);color:var(--amber)}
 .tag.purple{background:rgba(168,85,247,.16);color:var(--purple)}
+.warn-box{background:rgba(246,70,93,.1);border-left:3px solid var(--red);padding:8px;border-radius:6px;margin:8px 0;font-size:11px}
+.info-box{background:rgba(59,130,246,.1);border-left:3px solid var(--blue);padding:8px;border-radius:6px;margin:8px 0;font-size:11px}
 </style>
 </head>
 <body>
 
-<h1>DECISION<span>·ENGINE</span></h1>
+<h1>DECISION<span>·ENGINE·PRO</span></h1>
 
 <select class="sel" id="sym">
   <option value="BTCUSDT">BTC/USDT</option>
@@ -77,9 +87,11 @@ h2{font-size:11px;color:var(--cyan);margin:14px 0 8px;letter-spacing:1px;font-we
   <option value="DOGEUSDT">DOGE/USDT</option>
   <option value="AVAXUSDT">AVAX/USDT</option>
   <option value="LINKUSDT">LINK/USDT</option>
+  <option value="BNBUSDT">BNB/USDT</option>
+  <option value="MATICUSDT">MATIC/USDT</option>
 </select>
 
-<button class="btn" id="btnRun" onclick="run()">Analyze</button>
+<button class="btn" id="btnRun" onclick="run()">Full Analysis</button>
 <div class="auto" id="auto">ready</div>
 
 <div id="output"></div>
@@ -91,7 +103,21 @@ h2{font-size:11px;color:var(--cyan);margin:14px 0 8px;letter-spacing:1px;font-we
 'use strict';
 
 const BASE = 'https://data-api.binance.vision';
-const STATE = { symbol: 'BTCUSDT', depthHistory: [] };
+const CFG = {
+  TIMEFRAMES: ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'],
+  KLINE_LIMIT: 200,
+  DEPTH_LIMIT: 1000,
+  TRADES_LIMIT: 1000,
+  BUY_THRESHOLD: 8,
+  SELL_THRESHOLD: -8,
+  MIN_TF_AGREE: 2
+};
+
+const STATE = {
+  symbol: 'BTCUSDT',
+  depthHistory: [],
+  lastRun: 0
+};
 
 function log(msg, cls) {
   const el = document.getElementById('log');
@@ -100,7 +126,7 @@ function log(msg, cls) {
   d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
   el.appendChild(d);
   el.scrollTop = el.scrollHeight;
-  while (el.children.length > 40) el.removeChild(el.firstChild);
+  while (el.children.length > 60) el.removeChild(el.firstChild);
 }
 
 function fmt(n, dec) {
@@ -114,12 +140,18 @@ function fmt(n, dec) {
   return n.toPrecision(4);
 }
 
+function std(arr) {
+  if (arr.length < 2) return 0;
+  const m = arr.reduce((s,x) => s+x, 0) / arr.length;
+  return Math.sqrt(arr.reduce((s,x) => s + (x-m)**2, 0) / arr.length);
+}
+
 /* ============================================================
-   FETCHERS
+   DATA FETCHERS
    ============================================================ */
 async function fetchKlines(symbol, interval, limit) {
   const r = await fetch(`${BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
-  if (!r.ok) throw new Error('klines ' + r.status);
+  if (!r.ok) throw new Error(`klines ${interval} ${r.status}`);
   const raw = await r.json();
   return raw.map(k => ({ t: +k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5], tb: +k[9] }));
 }
@@ -151,10 +183,25 @@ async function fetch24h(symbol) {
   };
 }
 
+async function fetchAllTimeframes(symbol) {
+  const promises = CFG.TIMEFRAMES.map(tf =>
+    fetchKlines(symbol, tf, CFG.KLINE_LIMIT)
+      .then(k => ({ tf, klines: k, error: null }))
+      .catch(e => ({ tf, klines: null, error: e.message }))
+  );
+  const results = await Promise.all(promises);
+  const out = {};
+  for (const r of results) {
+    if (r.klines) out[r.tf] = r.klines;
+    else log('TF ' + r.tf + ' failed: ' + r.error, 'err');
+  }
+  return out;
+}
+
 /* ============================================================
-   ORDER BOOK ANALYSIS
+   ORDER BOOK — DEEP ANALYSIS
    ============================================================ */
-function analyzeOrderBook(depth) {
+function analyzeDeepOrderBook(depth) {
   const bids = depth.bids, asks = depth.asks;
   const mid = (bids[0].p + asks[0].p) / 2;
   const spread = asks[0].p - bids[0].p;
@@ -162,172 +209,80 @@ function analyzeOrderBook(depth) {
 
   function imbalance(level) {
     let bv = 0, av = 0;
-    for (let i = 0; i < Math.min(level, bids.length); i++) bv += bids[i].q;
-    for (let i = 0; i < Math.min(level, asks.length); i++) av += asks[i].q;
+    for (let i = 0; i < Math.min(level, bids.length); i++) bv += bids[i].p * bids[i].q;
+    for (let i = 0; i < Math.min(level, asks.length); i++) av += asks[i].p * asks[i].q;
     const total = bv + av;
     return total > 0 ? (bv - av) / total : 0;
   }
 
-  let totalBidVol = 0, totalAskVol = 0;
-  for (const b of bids) totalBidVol += b.p * b.q;
-  for (const a of asks) totalAskVol += a.p * a.q;
+  let totalBid = 0, totalAsk = 0;
+  for (const b of bids) totalBid += b.p * b.q;
+  for (const a of asks) totalAsk += a.p * a.q;
 
-  function findWalls(orders, side) {
-    return [...orders].sort((a, b) => (b.p * b.q) - (a.p * a.q)).slice(0, 3).map(o => ({
-      price: o.p, notional: o.p * o.q, distance: Math.abs(o.p - mid) / mid * 100, side
-    }));
+  // Cumulative depth curves
+  let cumB = 0;
+  const bidCurve = bids.slice(0, 30).map(b => {
+    cumB += b.p * b.q;
+    return { price: b.p, cum: cumB };
+  });
+  let cumA = 0;
+  const askCurve = asks.slice(0, 30).map(a => {
+    cumA += a.p * a.q;
+    return { price: a.p, cum: cumA };
+  });
+
+  // Largest walls across full book
+  const walls = [
+    ...bids.map(b => ({ price: b.p, notional: b.p*b.q, side: 'BID' })),
+    ...asks.map(a => ({ price: a.p, notional: a.p*a.q, side: 'ASK' }))
+  ].sort((a,b) => b.notional - a.notional).slice(0, 15);
+
+  // Liquidity clusters (0.2% buckets)
+  const bucketSize = mid * 0.002;
+  const clusters = {};
+  for (const b of bids) {
+    const key = Math.round(b.p / bucketSize);
+    if (!clusters[key]) clusters[key] = { price: key * bucketSize, bid: 0, ask: 0 };
+    clusters[key].bid += b.p * b.q;
   }
+  for (const a of asks) {
+    const key = Math.round(a.p / bucketSize);
+    if (!clusters[key]) clusters[key] = { price: key * bucketSize, bid: 0, ask: 0 };
+    clusters[key].ask += a.p * a.q;
+  }
+  const topClusters = Object.values(clusters)
+    .sort((a,b) => (b.bid + b.ask) - (a.bid + a.ask))
+    .slice(0, 15);
 
   return {
-    mid, spread, spreadPct, spreadPips: spread,
+    mid, spread, spreadPct,
     imb5: imbalance(5), imb20: imbalance(20), imb50: imbalance(50),
-    totalBidVol, totalAskVol, totalVol: totalBidVol + totalAskVol,
-    bidWalls: findWalls(bids, 'bid'), askWalls: findWalls(asks, 'ask'),
-    topBids: bids.slice(0, 15), topAsks: asks.slice(0, 15)
+    imb100: imbalance(100), imb500: imbalance(500),
+    totalBid, totalAsk,
+    bidCurve, askCurve,
+    walls, clusters: topClusters
   };
-}
-
-/* ============================================================
-   LIQUIDITY MAP — BSL/SSL + Pools
-   ============================================================ */
-function buildLiquidityMap(klines, currentPrice) {
-  const n = klines.length;
-  const lookback = Math.min(100, n - 3);
-
-  // Find swing highs (BSL) and swing lows (SSL) across last 100 bars
-  const swingHighs = [], swingLows = [];
-  for (let i = lookback; i < n - 2; i++) {
-    let isH = true, isL = true;
-    for (let j = 1; j <= 2; j++) {
-      if (i - j < 0 || i + j >= n) continue;
-      if (klines[i].h <= klines[i-j].h || klines[i].h <= klines[i+j].h) isH = false;
-      if (klines[i].l >= klines[i-j].l || klines[i].l >= klines[i+j].l) isL = false;
-    }
-    if (isH) swingHighs.push({ price: klines[i].h, index: i });
-    if (isL) swingLows.push({ price: klines[i].l, index: i });
-  }
-
-  // Cluster nearby swings (within 0.3%) — these are liquidity pools
-  function cluster(swings, tolerance) {
-    const clusters = [];
-    const used = new Array(swings.length).fill(false);
-    for (let i = 0; i < swings.length; i++) {
-      if (used[i]) continue;
-      const group = [swings[i]];
-      used[i] = true;
-      for (let j = i + 1; j < swings.length; j++) {
-        if (used[j]) continue;
-        if (Math.abs(swings[j].price - swings[i].price) / swings[i].price <= tolerance) {
-          group.push(swings[j]);
-          used[j] = true;
-        }
-      }
-      if (group.length >= 1) {
-        clusters.push({
-          price: group.reduce((s, g) => s + g.price, 0) / group.length,
-          count: group.length,
-          lastTouch: Math.max(...group.map(g => g.index))
-        });
-      }
-    }
-    return clusters;
-  }
-
-  const bslClusters = cluster(swingHighs, 0.003)
-    .filter(c => c.price > currentPrice)
-    .sort((a, b) => a.price - b.price);
-
-  const sslClusters = cluster(swingLows, 0.003)
-    .filter(c => c.price < currentPrice)
-    .sort((a, b) => b.price - a.price);
-
-  // Estimate liquidity at each level from historical volume near that price
-  function estimateLiquidity(level, tolerance = 0.005) {
-    let volume = 0, touches = 0;
-    for (const bar of klines) {
-      if (Math.abs(bar.h - level) / level < tolerance || Math.abs(bar.l - level) / level < tolerance) {
-        volume += bar.v * bar.c;
-        touches++;
-      }
-      // Volume traded through the level
-      if (bar.h >= level && bar.l <= level) volume += bar.v * bar.c;
-    }
-    return { volume, touches };
-  }
-
-  const bsl = bslClusters.slice(0, 5).map(c => {
-    const liq = estimateLiquidity(c.price);
-    return { ...c, estimatedLiquidity: liq.volume, touches: liq.touches };
-  });
-
-  const ssl = sslClusters.slice(0, 5).map(c => {
-    const liq = estimateLiquidity(c.price);
-    return { ...c, estimatedLiquidity: liq.volume, touches: liq.touches };
-  });
-
-  // Round number levels (psychological + liquidation magnets)
-  const magnitude = Math.pow(10, Math.floor(Math.log10(currentPrice)));
-  const roundStep = magnitude * 0.01;
-  const roundLevels = [];
-  const start = Math.floor(currentPrice / roundStep) * roundStep;
-  for (let i = -3; i <= 3; i++) {
-    roundLevels.push(start + i * roundStep);
-  }
-
-  return { bsl, ssl, roundLevels, swingHighs, swingLows };
-}
-
-/* ============================================================
-   LIQUIDATION ZONES — estimated from structure
-   ============================================================ */
-function estimateLiquidationZones(liquidityMap, currentPrice, klines) {
-  // Long liquidations cluster BELOW swing lows (where long stops are)
-  // Short liquidations cluster ABOVE swing highs (where short stops are)
-  // Volume of liquidations ≈ volume traded at those levels × leverage multiplier
-
-  const longLiq = [];
-  const shortLiq = [];
-
-  for (const level of liquidityMap.ssl.slice(0, 4)) {
-    // Every stop below a swing low is a long liquidation
-    const estimate = level.estimatedLiquidity * 2.5; // assume 3-5x leverage average
-    longLiq.push({
-      price: level.price,
-      type: 'LONG_LIQ',
-      estimate,
-      distance: ((currentPrice - level.price) / currentPrice * 100).toFixed(2)
-    });
-  }
-
-  for (const level of liquidityMap.bsl.slice(0, 4)) {
-    const estimate = level.estimatedLiquidity * 2.5;
-    shortLiq.push({
-      price: level.price,
-      type: 'SHORT_LIQ',
-      estimate,
-      distance: ((level.price - currentPrice) / currentPrice * 100).toFixed(2)
-    });
-  }
-
-  return { longLiq, shortLiq };
 }
 
 /* ============================================================
    ORDER FLOW
    ============================================================ */
 function analyzeOrderFlow(trades) {
-  let buyVol = 0, sellVol = 0, largeBuys = 0, largeSells = 0;
+  let buyVol = 0, sellVol = 0, buyCount = 0, sellCount = 0;
+  let largeBuys = 0, largeSells = 0;
   const cvdSeries = [];
   let cvd = 0;
 
   for (const t of trades) {
     const notional = t.p * t.q;
-    if (t.m) { // isBuyerMaker = true means seller was aggressive
+    if (t.m) {
       sellVol += notional;
+      sellCount++;
       cvd -= notional;
       if (notional > 50000) largeSells += notional;
     } else {
       buyVol += notional;
+      buyCount++;
       cvd += notional;
       if (notional > 50000) largeBuys += notional;
     }
@@ -338,16 +293,14 @@ function analyzeOrderFlow(trades) {
   const delta = buyVol - sellVol;
   const buyRatio = totalVol > 0 ? buyVol / totalVol : 0.5;
 
-  // Delta trend (last 20% vs previous)
   const split = Math.floor(trades.length * 0.2);
   const firstChunk = cvdSeries[split] || 0;
   const lastChunk = cvdSeries[cvdSeries.length - 1] || 0;
   const deltaTrend = lastChunk - firstChunk;
 
   return {
-    buyVol, sellVol, delta, buyRatio, cvd, deltaTrend,
-    largeBuys, largeSells,
-    totalTrades: trades.length
+    buyVol, sellVol, buyCount, sellCount, delta, buyRatio, cvd, deltaTrend,
+    largeBuys, largeSells, totalTrades: trades.length
   };
 }
 
@@ -355,7 +308,9 @@ function analyzeOrderFlow(trades) {
    VOLUME PROFILE
    ============================================================ */
 function analyzeVolume(klines, currentPrice) {
-  const recent = klines.slice(-100);
+  if (klines.length < 20) return { volMultiple: 1, poc: currentPrice, vah: currentPrice, val: currentPrice, inValueArea: true, abovePOC: true, lastBuyRatio: 0.5, absorption: null };
+
+  const recent = klines.slice(-Math.min(100, klines.length));
   const last = klines[klines.length - 1];
   const last20 = klines.slice(-20);
   const avgVol = last20.reduce((s, k) => s + k.v, 0) / last20.length;
@@ -363,40 +318,45 @@ function analyzeVolume(klines, currentPrice) {
 
   const high = Math.max(...recent.map(k => k.h));
   const low = Math.min(...recent.map(k => k.l));
+  const range = high - low;
+  if (range <= 0) return { volMultiple, poc: currentPrice, vah: currentPrice, val: currentPrice, inValueArea: true, abovePOC: true, lastBuyRatio: 0.5, absorption: null };
+
   const buckets = 30;
-  const bucketSize = (high - low) / buckets;
-  const volumeAtPrice = new Array(buckets).fill(0);
+  const bucketSize = range / buckets;
+  const volAtPrice = new Array(buckets).fill(0);
 
   for (const k of recent) {
     const midPrice = (k.h + k.l) / 2;
-    const idx = Math.min(buckets - 1, Math.floor((midPrice - low) / bucketSize));
-    volumeAtPrice[idx] += k.v;
+    const idx = Math.min(buckets - 1, Math.max(0, Math.floor((midPrice - low) / bucketSize)));
+    volAtPrice[idx] += k.v;
   }
 
   let pocIdx = 0, pocVol = 0;
-  for (let i = 0; i < volumeAtPrice.length; i++) {
-    if (volumeAtPrice[i] > pocVol) { pocVol = volumeAtPrice[i]; pocIdx = i; }
+  for (let i = 0; i < volAtPrice.length; i++) {
+    if (volAtPrice[i] > pocVol) { pocVol = volAtPrice[i]; pocIdx = i; }
   }
   const poc = low + (pocIdx + 0.5) * bucketSize;
 
-  const totalVol = volumeAtPrice.reduce((s, v) => s + v, 0);
+  const totalVol = volAtPrice.reduce((s,v) => s+v, 0);
   const target = totalVol * 0.7;
-  let acc = volumeAtPrice[pocIdx];
+  let acc = volAtPrice[pocIdx];
   let upIdx = pocIdx, downIdx = pocIdx;
-  while (acc < target) {
-    const upVol = upIdx + 1 < volumeAtPrice.length ? volumeAtPrice[upIdx + 1] : 0;
-    const downVol = downIdx - 1 >= 0 ? volumeAtPrice[downIdx - 1] : 0;
-    if (upVol > downVol && upIdx + 1 < volumeAtPrice.length) { upIdx++; acc += upVol; }
+
+  while (acc < target && (upIdx + 1 < volAtPrice.length || downIdx - 1 >= 0)) {
+    const upVol = upIdx + 1 < volAtPrice.length ? volAtPrice[upIdx + 1] : -1;
+    const downVol = downIdx - 1 >= 0 ? volAtPrice[downIdx - 1] : -1;
+    if (upVol > downVol && upIdx + 1 < volAtPrice.length) { upIdx++; acc += upVol; }
     else if (downIdx - 1 >= 0) { downIdx--; acc += downVol; }
     else break;
   }
+
   const vah = low + (upIdx + 1) * bucketSize;
   const val = low + downIdx * bucketSize;
 
   const body = Math.abs(last.c - last.o);
-  const range = last.h - last.l;
-  const bodyRatio = range > 0 ? body / range : 0;
-  const cPos = range > 0 ? (last.c - last.l) / range : 0.5;
+  const barRange = last.h - last.l;
+  const bodyRatio = barRange > 0 ? body / barRange : 0;
+  const cPos = barRange > 0 ? (last.c - last.l) / barRange : 0.5;
   const lastBuyRatio = last.v > 0 ? last.tb / last.v : 0.5;
 
   let absorption = null;
@@ -405,15 +365,18 @@ function analyzeVolume(klines, currentPrice) {
     else if (cPos > 0.6 && lastBuyRatio < 0.45) absorption = 'BEARISH_ABSORPTION';
   }
 
-  return { volMultiple, poc, vah, val, inValueArea: currentPrice >= val && currentPrice <= vah,
-           abovePOC: currentPrice > poc, lastBuyRatio, absorption, volumeAtPrice };
+  return {
+    volMultiple, poc, vah, val, inValueArea: currentPrice >= val && currentPrice <= vah,
+    abovePOC: currentPrice > poc, lastBuyRatio, absorption, volAtPrice, high, low
+  };
 }
 
 /* ============================================================
-   STRUCTURE
+   MARKET STRUCTURE
    ============================================================ */
 function analyzeStructure(klines) {
   const n = klines.length;
+  if (n < 10) return { bosBull: false, bosBear: false, chochBull: false, chochBear: false, sweepHigh: false, sweepLow: false, sweepLevel: null, inPremium: false, inDiscount: false, equilibrium: 0, recentHigh: 0, recentLow: 0, fvgBull: null, fvgBear: null };
 
   function findSwings(lookback) {
     const highs = [], lows = [];
@@ -450,7 +413,7 @@ function analyzeStructure(klines) {
   if (bosBear && lastLows.length >= 2 && lastLows[lastLows.length - 2].price > lastLows[lastLows.length - 1].price) chochBear = true;
 
   let fvgBull = null, fvgBear = null;
-  for (let i = n - 5; i < n; i++) {
+  for (let i = Math.max(2, n - 5); i < n; i++) {
     if (klines[i].l > klines[i-2].h) fvgBull = { top: klines[i].l, bottom: klines[i-2].h, age: n - 1 - i };
     if (klines[i].h < klines[i-2].l) fvgBear = { top: klines[i-2].l, bottom: klines[i].h, age: n - 1 - i };
   }
@@ -460,195 +423,457 @@ function analyzeStructure(klines) {
   const equilibrium = (recentHigh + recentLow) / 2;
 
   let sweepHigh = false, sweepLow = false, sweepLevel = null;
-  for (const h of lastHighs) {
-    if (lastBar.h > h.price && lastBar.c < h.price) { sweepHigh = true; sweepLevel = h.price; }
-  }
-  for (const l of lastLows) {
-    if (lastBar.l < l.price && lastBar.c > l.price) { sweepLow = true; sweepLevel = l.price; }
-  }
+  for (const h of lastHighs) if (lastBar.h > h.price && lastBar.c < h.price) { sweepHigh = true; sweepLevel = h.price; }
+  for (const l of lastLows) if (lastBar.l < l.price && lastBar.c > l.price) { sweepLow = true; sweepLevel = l.price; }
 
-  return { bosBull, bosBear, chochBull, chochBear, fvgBull, fvgBear,
-           inPremium: lastBar.c > equilibrium, inDiscount: lastBar.c < equilibrium, equilibrium,
-           sweepHigh, sweepLow, sweepLevel, recentHigh, recentLow, lastBar };
+  return {
+    bosBull, bosBear, chochBull, chochBear, fvgBull, fvgBear,
+    inPremium: lastBar.c > equilibrium, inDiscount: lastBar.c < equilibrium, equilibrium,
+    sweepHigh, sweepLow, sweepLevel, recentHigh, recentLow
+  };
 }
 
 /* ============================================================
-   MANIPULATION
+   MULTI-TIMEFRAME CONFLUENCE
    ============================================================ */
+function analyzeTimeframes(tfKlines, currentPrice) {
+  const out = {};
+  for (const [tf, klines] of Object.entries(tfKlines)) {
+    const structure = analyzeStructure(klines);
+    const volume = analyzeVolume(klines, currentPrice);
+
+    let bias = 'neutral';
+    let score = 0;
+    if (structure.bosBull) score += 2;
+    if (structure.chochBull) score += 2;
+    if (structure.inDiscount) score += 1;
+    if (structure.bosBear) score -= 2;
+    if (structure.chochBear) score -= 2;
+    if (structure.inPremium) score -= 1;
+
+    if (score >= 2) bias = 'bull';
+    else if (score <= -2) bias = 'bear';
+
+    out[tf] = { structure, volume, bias, score };
+  }
+  return out;
+}
+
+function tfConfluence(tfAnalysis) {
+  let bull = 0, bear = 0, neutral = 0;
+  const breakdown = [];
+  for (const [tf, a] of Object.entries(tfAnalysis)) {
+    if (a.bias === 'bull') bull++;
+    else if (a.bias === 'bear') bear++;
+    else neutral++;
+    breakdown.push({ tf, bias: a.bias, score: a.score });
+  }
+  const total = bull + bear + neutral;
+  return { bull, bear, neutral, total, breakdown };
+}
+
+/* ============================================================
+   LIQUIDITY MAP
+   ============================================================ */
+function buildLiquidityMap(klines, currentPrice) {
+  const n = klines.length;
+  const lookback = Math.min(100, n - 3);
+
+  const swingHighs = [], swingLows = [];
+  for (let i = lookback; i < n - 2; i++) {
+    let isH = true, isL = true;
+    for (let j = 1; j <= 2; j++) {
+      if (i - j < 0 || i + j >= n) continue;
+      if (klines[i].h <= klines[i-j].h || klines[i].h <= klines[i+j].h) isH = false;
+      if (klines[i].l >= klines[i-j].l || klines[i].l >= klines[i+j].l) isL = false;
+    }
+    if (isH) swingHighs.push({ price: klines[i].h, index: i });
+    if (isL) swingLows.push({ price: klines[i].l, index: i });
+  }
+
+  function cluster(swings, tol) {
+    const out = [], used = new Array(swings.length).fill(false);
+    for (let i = 0; i < swings.length; i++) {
+      if (used[i]) continue;
+      const g = [swings[i]]; used[i] = true;
+      for (let j = i + 1; j < swings.length; j++) {
+        if (used[j]) continue;
+        if (Math.abs(swings[j].price - swings[i].price) / swings[i].price <= tol) {
+          g.push(swings[j]); used[j] = true;
+        }
+      }
+      out.push({
+        price: g.reduce((s,x) => s+x.price, 0) / g.length,
+        count: g.length,
+        lastTouch: Math.max(...g.map(x => x.index))
+      });
+    }
+    return out;
+  }
+
+  function estimate(level, tol) {
+    let vol = 0, touches = 0;
+    for (const bar of klines) {
+      if (bar.h >= level && bar.l <= level) { vol += bar.v * bar.c; touches++; }
+    }
+    return { vol, touches };
+  }
+
+  const bsl = cluster(swingHighs, 0.003).filter(c => c.price > currentPrice).sort((a,b) => a.price - b.price).slice(0, 6)
+    .map(c => ({ ...c, ...estimate(c.price, 0.005) }));
+
+  const ssl = cluster(swingLows, 0.003).filter(c => c.price < currentPrice).sort((a,b) => b.price - a.price).slice(0, 6)
+    .map(c => ({ ...c, ...estimate(c.price, 0.005) }));
+
+  return { bsl, ssl };
+}
+
+function estimateLiquidationZones(liqMap, price) {
+  return {
+    long: liqMap.ssl.map(l => ({
+      price: l.price,
+      estimate: l.vol * 2.5,
+      distance: ((price - l.price) / price * 100).toFixed(2)
+    })),
+    short: liqMap.bsl.map(l => ({
+      price: l.price,
+      estimate: l.vol * 2.5,
+      distance: ((l.price - price) / price * 100).toFixed(2)
+    }))
+  };
+}
+
+/* ============================================================
+   MANIPULATION DETECTION — 7 DETECTORS
+   ============================================================ */
+
+// 1. SPOOFING: large orders that vanished
 function detectSpoofing(depthHistory) {
-  if (depthHistory.length < 2) return { detected: false, reason: 'building history' };
+  if (depthHistory.length < 2) return { detected: false, reason: 'building history', vanished: [] };
   const prev = depthHistory[depthHistory.length - 2];
   const curr = depthHistory[depthHistory.length - 1];
-  const avgBid = prev.bids.reduce((s, o) => s + o.q, 0) / prev.bids.length || 1;
-  const avgAsk = prev.asks.reduce((s, o) => s + o.q, 0) / prev.asks.length || 1;
+  const avgB = prev.bids.reduce((s,o) => s+o.q, 0) / prev.bids.length || 1;
+  const avgA = prev.asks.reduce((s,o) => s+o.q, 0) / prev.asks.length || 1;
   const vanished = [];
 
   for (const po of prev.bids) {
-    if (po.q < avgBid * 3) continue;
+    if (po.q < avgB * 3) continue;
     if (!curr.bids.find(o => Math.abs(o.p - po.p) < 0.001 && o.q >= po.q * 0.5)) {
-      vanished.push({ side: 'bid', price: po.p, qty: po.q });
+      vanished.push({ side: 'BID', price: po.p, qty: po.q });
     }
   }
   for (const po of prev.asks) {
-    if (po.q < avgAsk * 3) continue;
+    if (po.q < avgA * 3) continue;
     if (!curr.asks.find(o => Math.abs(o.p - po.p) < 0.001 && o.q >= po.q * 0.5)) {
-      vanished.push({ side: 'ask', price: po.p, qty: po.q });
+      vanished.push({ side: 'ASK', price: po.p, qty: po.q });
     }
   }
-  return { detected: vanished.length > 0, count: vanished.length, vanished,
-           reason: vanished.length > 0 ? `${vanished.length} large order(s) vanished` : 'no spoofing' };
+  return {
+    detected: vanished.length > 0, count: vanished.length, vanished,
+    reason: vanished.length > 0 ? `${vanished.length} large order(s) vanished` : 'no spoofing'
+  };
 }
 
-function detectStopHunts(klines) {
+// 2. ICEBERG: repeated same-size trades at same price
+function detectIcebergs(trades) {
+  const byPrice = {};
+  for (const t of trades) {
+    const key = t.p.toFixed(8);
+    if (!byPrice[key]) byPrice[key] = [];
+    byPrice[key].push(t);
+  }
+
+  const icebergs = [];
+  for (const [price, ts] of Object.entries(byPrice)) {
+    if (ts.length < 5) continue;
+    const sizes = ts.map(t => t.q);
+    const avgSize = sizes.reduce((s,x) => s+x, 0) / sizes.length;
+    if (avgSize === 0) continue;
+    const variance = sizes.reduce((s,x) => s + (x-avgSize)**2, 0) / sizes.length;
+    const cv = Math.sqrt(variance) / avgSize;
+
+    if (cv < 0.25 && ts.length >= 5) {
+      const side = ts[0].m ? 'SELL' : 'BUY';
+      const notional = ts.reduce((s,t) => s + t.p*t.q, 0);
+      icebergs.push({
+        price: +price, count: ts.length, side, notional,
+        avgSize, cv
+      });
+    }
+  }
+  return icebergs.sort((a,b) => b.notional - a.notional).slice(0, 5);
+}
+
+// 3. WASH TRADING: rapid alternating same-price trades
+function detectWashTrading(trades) {
+  let count = 0, volume = 0;
+  for (let i = 1; i < trades.length; i++) {
+    const p = trades[i-1], c = trades[i];
+    const priceDiff = Math.abs(c.p - p.p) / p.p;
+    const timeDiff = c.t - p.t;
+    if (priceDiff < 0.0001 && p.m !== c.m && timeDiff < 1000) {
+      count++;
+      volume += c.p * c.q;
+    }
+  }
+  return {
+    count, volume,
+    suspicious: count > trades.length * 0.1,
+    pct: trades.length > 0 ? count / trades.length * 100 : 0
+  };
+}
+
+// 4. LAYERING: consistent order sizes at consecutive price levels
+function detectLayering(depth) {
+  function checkSide(orders, side) {
+    if (orders.length < 5) return null;
+    const notional = orders.slice(0, 20).map(o => o.p * o.q);
+    const avg = notional.reduce((s,x) => s+x, 0) / notional.length;
+    if (avg === 0) return null;
+
+    let similar = 0;
+    for (let i = 1; i < notional.length; i++) {
+      if (Math.abs(notional[i] - notional[i-1]) / avg < 0.3) similar++;
+    }
+    const ratio = similar / (notional.length - 1);
+
+    if (ratio > 0.7) {
+      return { side, layers: notional.length, totalNotional: notional.reduce((s,x) => s+x, 0), avgSize: avg };
+    }
+    return null;
+  }
+  return {
+    bid: checkSide(depth.bids, 'BID'),
+    ask: checkSide(depth.asks, 'ASK')
+  };
+}
+
+// 5. QUOTE STUFFING: rapid spread/volume fluctuations
+function detectQuoteStuffing(depthHistory) {
+  if (depthHistory.length < 3) return { detected: false };
+  const spreads = depthHistory.map(d => (d.asks[0]?.p || 0) - (d.bids[0]?.p || 0)).filter(x => x > 0);
+  const volumes = depthHistory.map(d => d.bids.reduce((s,o) => s+o.q, 0) + d.asks.reduce((s,o) => s+o.q, 0));
+
+  if (spreads.length < 3) return { detected: false };
+
+  const avgSpread = spreads.reduce((s,x) => s+x, 0) / spreads.length;
+  const avgVol = volumes.reduce((s,x) => s+x, 0) / volumes.length;
+  const spreadCV = std(spreads) / (avgSpread || 1);
+  const volCV = std(volumes) / (avgVol || 1);
+
+  return {
+    detected: spreadCV > 0.5 && volCV > 0.3,
+    spreadCV, volCV
+  };
+}
+
+// 6. FRONT-RUNNING: large orders dominating one side before moves
+function detectFrontRunning(depth, trades) {
+  const mid = (depth.bids[0].p + depth.asks[0].p) / 2;
+  const largeBids = depth.bids.filter(o => o.p * o.q > 50000);
+  const largeAsks = depth.asks.filter(o => o.p * o.q > 50000);
+
+  if (trades.length < 10) return null;
+  const recentChange = (trades[trades.length-1].p - trades[0].p) / trades[0].p;
+
+  if (recentChange > 0.002 && largeBids.length > largeAsks.length * 2) {
+    return { type: 'BULLISH_FRONT_RUN', largeBids: largeBids.length, largeAsks: largeAsks.length };
+  }
+  if (recentChange < -0.002 && largeAsks.length > largeBids.length * 2) {
+    return { type: 'BEARISH_FRONT_RUN', largeBids: largeBids.length, largeAsks: largeAsks.length };
+  }
+  return null;
+}
+
+// 7. STOP HUNTS: wick beyond swing, close back inside
+function detectStopHunts(klines, tf) {
   const hunts = [];
   for (let i = 5; i < klines.length; i++) {
     const bar = klines[i];
     const body = Math.abs(bar.c - bar.o);
     const range = bar.h - bar.l;
     if (range === 0) continue;
+
     let priorHigh = -Infinity, priorLow = Infinity;
     for (let j = i - 5; j < i; j++) {
       if (klines[j].h > priorHigh) priorHigh = klines[j].h;
       if (klines[j].l < priorLow) priorLow = klines[j].l;
     }
+
     const wickUp = bar.h - Math.max(bar.o, bar.c);
     const wickDown = Math.min(bar.o, bar.c) - bar.l;
+
     if (bar.h > priorHigh && bar.c < priorHigh && wickUp > body * 1.2) {
-      hunts.push({ type: 'STOP_HUNT_UP', level: priorHigh, bar: i });
+      hunts.push({ type: 'HUNT_UP', level: priorHigh, tf, bar: i });
     }
     if (bar.l < priorLow && bar.c > priorLow && wickDown > body * 1.2) {
-      hunts.push({ type: 'STOP_HUNT_DOWN', level: priorLow, bar: i });
+      hunts.push({ type: 'HUNT_DOWN', level: priorLow, tf, bar: i });
     }
   }
-  return hunts.slice(-3);
+  return hunts;
+}
+
+function detectAllStopHunts(tfKlines) {
+  const all = [];
+  for (const [tf, klines] of Object.entries(tfKlines)) {
+    const hunts = detectStopHunts(klines, tf);
+    all.push(...hunts.slice(-2));
+  }
+  return all.sort((a,b) => b.bar - a.bar).slice(0, 8);
 }
 
 /* ============================================================
    DECISION ENGINE
-   Scores all factors. Produces BUY/SELL/WAIT.
    ============================================================ */
-function decide(ob, of, vol, struct, spoof, hunts, price) {
+function decide(ob, of, vol, struct, tfConfl, manip, price) {
   const factors = [];
   let score = 0;
 
   function add(name, direction, weight, detail) {
-    // direction: 'bull' | 'bear' | 'neutral'
     if (direction === 'bull') score += weight;
     else if (direction === 'bear') score -= weight;
     factors.push({ name, direction, weight, detail });
   }
 
-  // 1. Order Book Imbalance
-  if (ob.imb20 > 0.20) add('Order Book Imbalance', 'bull', 2, `+${(ob.imb20*100).toFixed(0)}% bids dominant (20 levels)`);
-  else if (ob.imb20 > 0.10) add('Order Book Imbalance', 'bull', 1, `+${(ob.imb20*100).toFixed(0)}% bids dominant`);
-  else if (ob.imb20 < -0.20) add('Order Book Imbalance', 'bear', 2, `${(ob.imb20*100).toFixed(0)}% asks dominant (20 levels)`);
-  else if (ob.imb20 < -0.10) add('Order Book Imbalance', 'bear', 1, `${(ob.imb20*100).toFixed(0)}% asks dominant`);
-  else add('Order Book Imbalance', 'neutral', 0, `balanced (${(ob.imb20*100).toFixed(0)}%)`);
+  // Order Book — multiple levels
+  if (ob.imb20 > 0.20) add('Order Book Imbalance (20)', 'bull', 2, `+${(ob.imb20*100).toFixed(0)}% bids`);
+  else if (ob.imb20 > 0.10) add('Order Book Imbalance (20)', 'bull', 1, `+${(ob.imb20*100).toFixed(0)}% bids`);
+  else if (ob.imb20 < -0.20) add('Order Book Imbalance (20)', 'bear', 2, `${(ob.imb20*100).toFixed(0)}% asks`);
+  else if (ob.imb20 < -0.10) add('Order Book Imbalance (20)', 'bear', 1, `${(ob.imb20*100).toFixed(0)}% asks`);
+  else add('Order Book Imbalance (20)', 'neutral', 0, 'balanced');
 
-  // 2. Cumulative Delta
-  if (of.cvd > of.buyVol * 0.15) add('Cumulative Delta', 'bull', 2, `CVD +${fmt(of.cvd)} (strong buying)`);
-  else if (of.cvd > 0) add('Cumulative Delta', 'bull', 1, `CVD +${fmt(of.cvd)}`);
-  else if (of.cvd < -of.sellVol * 0.15) add('Cumulative Delta', 'bear', 2, `CVD ${fmt(of.cvd)} (strong selling)`);
-  else if (of.cvd < 0) add('Cumulative Delta', 'bear', 1, `CVD ${fmt(of.cvd)}`);
+  // Deep book imbalance
+  if (ob.imb500 > 0.20) add('Deep Book Imbalance (500)', 'bull', 2, `+${(ob.imb500*100).toFixed(0)}% deep bids`);
+  else if (ob.imb500 < -0.20) add('Deep Book Imbalance (500)', 'bear', 2, `${(ob.imb500*100).toFixed(0)}% deep asks`);
+  else add('Deep Book Imbalance (500)', 'neutral', 0, 'balanced');
+
+  // Order Flow
+  if (of.buyRatio > 0.58) add('Aggressive Buy Ratio', 'bull', 2, `${(of.buyRatio*100).toFixed(0)}% buys`);
+  else if (of.buyRatio > 0.53) add('Aggressive Buy Ratio', 'bull', 1, `${(of.buyRatio*100).toFixed(0)}% buys`);
+  else if (of.buyRatio < 0.42) add('Aggressive Buy Ratio', 'bear', 2, `${(of.buyRatio*100).toFixed(0)}% sells`);
+  else if (of.buyRatio < 0.47) add('Aggressive Buy Ratio', 'bear', 1, `${(of.buyRatio*100).toFixed(0)}% sells`);
+  else add('Aggressive Buy Ratio', 'neutral', 0, 'balanced');
+
+  // CVD
+  if (of.cvd > of.buyVol * 0.15) add('Cumulative Delta', 'bull', 2, `strong buying pressure`);
+  else if (of.cvd > 0) add('Cumulative Delta', 'bull', 1, `positive delta`);
+  else if (of.cvd < -of.sellVol * 0.15) add('Cumulative Delta', 'bear', 2, `strong selling pressure`);
+  else if (of.cvd < 0) add('Cumulative Delta', 'bear', 1, `negative delta`);
   else add('Cumulative Delta', 'neutral', 0, 'balanced');
 
-  // 3. Buy Ratio
-  if (of.buyRatio > 0.58) add('Aggressive Buy Ratio', 'bull', 2, `${(of.buyRatio*100).toFixed(0)}% aggressive buys`);
-  else if (of.buyRatio > 0.53) add('Aggressive Buy Ratio', 'bull', 1, `${(of.buyRatio*100).toFixed(0)}% buys`);
-  else if (of.buyRatio < 0.42) add('Aggressive Buy Ratio', 'bear', 2, `${(of.buyRatio*100).toFixed(0)}% aggressive sells`);
-  else if (of.buyRatio < 0.47) add('Aggressive Buy Ratio', 'bear', 1, `${(of.buyRatio*100).toFixed(0)}% sells`);
-  else add('Aggressive Buy Ratio', 'neutral', 0, `balanced (${(of.buyRatio*100).toFixed(0)}%)`);
+  // Structure (1h)
+  if (struct.bosBull) add('Structure BOS (1h)', 'bull', 2, 'break of structure up');
+  else if (struct.bosBear) add('Structure BOS (1h)', 'bear', 2, 'break of structure down');
+  else add('Structure BOS (1h)', 'neutral', 0, 'no break');
 
-  // 4. BOS
-  if (struct.bosBull) add('Break of Structure', 'bull', 2, 'BOS up');
-  else if (struct.bosBear) add('Break of Structure', 'bear', 2, 'BOS down');
-  else add('Break of Structure', 'neutral', 0, 'no BOS');
+  if (struct.chochBull) add('Structure CHoCH (1h)', 'bull', 2, 'reversal up');
+  else if (struct.chochBear) add('Structure CHoCH (1h)', 'bear', 2, 'reversal down');
+  else add('Structure CHoCH (1h)', 'neutral', 0, 'no reversal');
 
-  // 5. CHoCH
-  if (struct.chochBull) add('Change of Character', 'bull', 2, 'CHoCH up (bullish reversal)');
-  else if (struct.chochBear) add('Change of Character', 'bear', 2, 'CHoCH down (bearish reversal)');
-  else add('Change of Character', 'neutral', 0, 'no reversal');
+  // Sweep
+  if (struct.sweepLow) add('Liquidity Sweep', 'bull', 2, `swept SSL`);
+  else if (struct.sweepHigh) add('Liquidity Sweep', 'bear', 2, `swept BSL`);
+  else add('Liquidity Sweep', 'neutral', 0, 'none');
 
-  // 6. Sweep
-  if (struct.sweepLow) add('Liquidity Sweep', 'bull', 2, `swept SSL @ ${fmt(struct.sweepLevel)}`);
-  else if (struct.sweepHigh) add('Liquidity Sweep', 'bear', 2, `swept BSL @ ${fmt(struct.sweepLevel)}`);
-  else add('Liquidity Sweep', 'neutral', 0, 'no sweep');
-
-  // 7. Premium / Discount
-  if (struct.inDiscount) add('Premium/Discount', 'bull', 1, 'price in discount zone');
-  else if (struct.inPremium) add('Premium/Discount', 'bear', 1, 'price in premium zone');
+  // Premium/Discount
+  if (struct.inDiscount) add('Premium/Discount', 'bull', 1, 'in discount zone');
+  else if (struct.inPremium) add('Premium/Discount', 'bear', 1, 'in premium zone');
   else add('Premium/Discount', 'neutral', 0, 'near equilibrium');
 
-  // 8. Volume Profile position
-  if (vol.abovePOC) add('Volume Profile', 'bull', 1, `above POC (${fmt(vol.poc)})`);
-  else add('Volume Profile', 'bear', 1, `below POC (${fmt(vol.poc)})`);
+  // Volume
+  if (vol.abovePOC) add('Volume Profile', 'bull', 1, `above POC`);
+  else add('Volume Profile', 'bear', 1, `below POC`);
 
-  // 9. Volume absorption
-  if (vol.absorption === 'BULLISH_ABSORPTION') add('Volume Absorption', 'bull', 2, 'bullish absorption detected');
-  else if (vol.absorption === 'BEARISH_ABSORPTION') add('Volume Absorption', 'bear', 2, 'bearish absorption detected');
+  if (vol.absorption === 'BULLISH_ABSORPTION') add('Volume Absorption', 'bull', 2, 'bullish absorption');
+  else if (vol.absorption === 'BEARISH_ABSORPTION') add('Volume Absorption', 'bear', 2, 'bearish absorption');
   else add('Volume Absorption', 'neutral', 0, 'none');
 
-  // 10. FVG
+  // FVG
   if (struct.fvgBull && struct.fvgBull.age <= 3) add('Fair Value Gap', 'bull', 1, 'recent bullish FVG');
   else if (struct.fvgBear && struct.fvgBear.age <= 3) add('Fair Value Gap', 'bear', 1, 'recent bearish FVG');
   else add('Fair Value Gap', 'neutral', 0, 'no recent FVG');
 
-  // 11. Spoofing (negative for both sides)
-  if (spoof.detected) add('Spoofing Detection', 'neutral', 0, `${spoof.count} order(s) vanished — be careful`);
+  // Multi-TF confluence
+  if (tfConfl.bull >= 4 && tfConfl.bear <= 1) add('Multi-Timeframe', 'bull', 3, `${tfConfl.bull}/8 TFs bullish`);
+  else if (tfConfl.bull >= 3 && tfConfl.bear <= 1) add('Multi-Timeframe', 'bull', 2, `${tfConfl.bull}/8 TFs bullish`);
+  else if (tfConfl.bear >= 4 && tfConfl.bull <= 1) add('Multi-Timeframe', 'bear', 3, `${tfConfl.bear}/8 TFs bearish`);
+  else if (tfConfl.bear >= 3 && tfConfl.bull <= 1) add('Multi-Timeframe', 'bear', 2, `${tfConfl.bear}/8 TFs bearish`);
+  else add('Multi-Timeframe', 'neutral', 0, `${tfConfl.bull} bull / ${tfConfl.bear} bear / ${tfConfl.neutral} neutral`);
 
-  // 12. Recent stop hunts
-  if (hunts.length > 0) {
-    const lastHunt = hunts[hunts.length - 1];
-    if (lastHunt.type === 'STOP_HUNT_DOWN') add('Stop Hunt', 'bull', 1, `swept lows @ ${fmt(lastHunt.level)}`);
-    else add('Stop Hunt', 'bear', 1, `swept highs @ ${fmt(lastHunt.level)}`);
+  // Manipulation penalties
+  if (manip.spoof.detected) add('⚠ Spoofing', 'neutral', 0, `${manip.spoof.count} order(s) vanished`);
+  if (manip.wash.suspicious) add('⚠ Wash Trading', 'neutral', 0, `${manip.wash.pct.toFixed(1)}% of trades`);
+  if (manip.stuffing.detected) add('⚠ Quote Stuffing', 'neutral', 0, 'spread/volume unstable');
+  if (manip.layering.bid || manip.layering.ask) add('⚠ Layering', 'neutral', 0, 'uniform order sizes');
+  if (manip.icebergs.length > 0) {
+    const top = manip.icebergs[0];
+    add('Iceberg Detected', top.side === 'BUY' ? 'bull' : 'bear', 1, `${top.side} @ ${fmt(top.price)}`);
+  }
+  if (manip.frontRun) add('Front-Running', manip.frontRun.type === 'BULLISH_FRONT_RUN' ? 'bull' : 'bear', 1, manip.frontRun.type);
+  if (manip.recentHunts.length > 0) {
+    const last = manip.recentHunts[0];
+    if (last.type === 'HUNT_DOWN') add('Stop Hunt', 'bull', 1, `swept lows on ${last.tf}`);
+    else add('Stop Hunt', 'bear', 1, `swept highs on ${last.tf}`);
   }
 
-  // DECISION
-  const maxPossible = 15;
+  // PENALTY: if manipulation detected, reduce confidence (can't trust factors)
+  let manipPenalty = 0;
+  if (manip.spoof.detected) manipPenalty += 2;
+  if (manip.wash.suspicious) manipPenalty += 2;
+  if (manip.stuffing.detected) manipPenalty += 1;
+  if (manip.layering.bid || manip.layering.ask) manipPenalty += 1;
+
+  score = score > 0 ? Math.max(0, score - manipPenalty) : Math.min(0, score + manipPenalty);
+
+  const maxPossible = 22;
   const confidence = Math.min(100, Math.abs(score) / maxPossible * 100);
-  let action, reason;
 
-  if (score >= 6) { action = 'BUY'; reason = `${score} bullish factors aligned — strong long setup`; }
-  else if (score <= -6) { action = 'SELL'; reason = `${Math.abs(score)} bearish factors aligned — strong short setup`; }
-  else if (score >= 3) { action = 'WAIT'; reason = `${score} bullish factors — not enough confirmations for BUY (need +6)`; }
-  else if (score <= -3) { action = 'WAIT'; reason = `${Math.abs(score)} bearish factors — not enough confirmations for SELL (need -6)`; }
-  else { action = 'WAIT'; reason = `Only ${Math.abs(score)} factors aligned — market is unclear`; }
+  let action;
+  if (score >= CFG.BUY_THRESHOLD && tfConfl.bull >= CFG.MIN_TF_AGREE) {
+    action = 'BUY';
+  } else if (score <= CFG.SELL_THRESHOLD && tfConfl.bear >= CFG.MIN_TF_AGREE) {
+    action = 'SELL';
+  } else {
+    action = 'WAIT';
+  }
 
-  return { action, score, confidence, reason, factors };
+  return { action, score, confidence, factors, manipPenalty };
 }
 
 /* ============================================================
    TRADE LEVELS
    ============================================================ */
-function buildTradeLevels(action, price, struct, ob, liquidityMap, atr) {
+function buildTradeLevels(action, price, struct, liqMap, atr) {
   if (action === 'WAIT') return null;
 
   if (action === 'BUY') {
     let stop = price - atr * 1.5;
     if (struct.sweepLow && struct.sweepLevel) stop = Math.min(stop, struct.sweepLevel - atr * 0.3);
-    if (liquidityMap.ssl.length > 0) stop = Math.min(stop, liquidityMap.ssl[0].price - atr * 0.3);
+    if (liqMap.ssl.length > 0) stop = Math.min(stop, liqMap.ssl[0].price - atr * 0.3);
 
     const risk = price - stop;
-    const tp1 = price + risk * 1.5;
-    const tp2 = price + risk * 2.5;
-    const tp3 = price + risk * 4.0;
-
-    return { entry: price, stop, tp1, tp2, tp3, rr: (tp2 - price) / risk, risk };
+    return {
+      entry: price, stop,
+      tp1: price + risk * 1.5, tp2: price + risk * 2.5, tp3: price + risk * 4.0,
+      rr: (price + risk * 2.5 - price) / risk, risk
+    };
   } else {
     let stop = price + atr * 1.5;
     if (struct.sweepHigh && struct.sweepLevel) stop = Math.max(stop, struct.sweepLevel + atr * 0.3);
-    if (liquidityMap.bsl.length > 0) stop = Math.max(stop, liquidityMap.bsl[0].price + atr * 0.3);
+    if (liqMap.bsl.length > 0) stop = Math.max(stop, liqMap.bsl[0].price + atr * 0.3);
 
     const risk = stop - price;
-    const tp1 = price - risk * 1.5;
-    const tp2 = price - risk * 2.5;
-    const tp3 = price - risk * 4.0;
-
-    return { entry: price, stop, tp1, tp2, tp3, rr: (price - tp2) / risk, risk };
+    return {
+      entry: price, stop,
+      tp1: price - risk * 1.5, tp2: price - risk * 2.5, tp3: price - risk * 4.0,
+      rr: (price - (price - risk * 2.5)) / risk, risk
+    };
   }
 }
 
-function calcATR(klines, period = 14) {
+function calcATR(klines, period) {
+  period = period || 14;
+  if (klines.length < 2) return 0;
   let sum = 0, cnt = 0;
   for (let i = Math.max(1, klines.length - period); i < klines.length; i++) {
     sum += Math.max(klines[i].h - klines[i].l,
@@ -656,61 +881,67 @@ function calcATR(klines, period = 14) {
                      Math.abs(klines[i].l - klines[i-1].c));
     cnt++;
   }
-  return cnt > 0 ? sum / cnt : 1;
+  return cnt > 0 ? sum / cnt : 0;
 }
 
 /* ============================================================
-   RENDER
+   MAIN
    ============================================================ */
 async function run() {
   const sym = document.getElementById('sym').value;
   STATE.symbol = sym;
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
-  btn.textContent = 'Analyzing…';
+  btn.textContent = 'Analyzing all timeframes…';
   document.getElementById('auto').textContent = 'fetching…';
 
   try {
-    log('Analyzing ' + sym + '…', 'ok');
-    const [klines1h, klines15m, depth, trades, ticker] = await Promise.all([
-      fetchKlines(sym, '1h', 200),
-      fetchKlines(sym, '15m', 100),
-      fetchDepth(sym, 100),
-      fetchAggTrades(sym, 1000),
+    log('Analyzing ' + sym + ' across ' + CFG.TIMEFRAMES.length + ' timeframes…', 'ok');
+
+    const [tfKlines, depth, trades, ticker] = await Promise.all([
+      fetchAllTimeframes(sym),
+      fetchDepth(sym, CFG.DEPTH_LIMIT),
+      fetchAggTrades(sym, CFG.TRADES_LIMIT),
       fetch24h(sym)
     ]);
 
-    // Store depth snapshot for spoofing detection
+    log('Timeframes loaded: ' + Object.keys(tfKlines).join(', '), 'ok');
+    log('Depth: ' + depth.bids.length + ' bids, ' + depth.asks.length + ' asks', 'ok');
+    log('Trades: ' + trades.length, 'ok');
+
     STATE.depthHistory.push({
       time: Date.now(),
-      bids: depth.bids.slice(0, 20),
-      asks: depth.asks.slice(0, 20)
+      bids: depth.bids.slice(0, 30),
+      asks: depth.asks.slice(0, 30)
     });
     while (STATE.depthHistory.length > 20) STATE.depthHistory.shift();
 
-    log('Data loaded: ' + klines1h.length + ' 1h, ' + trades.length + ' trades', 'ok');
-
     // Run all engines
-    const ob = analyzeOrderBook(depth);
+    const mainTF = tfKlines['1h'] || tfKlines['15m'] || Object.values(tfKlines)[0];
+    const ob = analyzeDeepOrderBook(depth);
     const of = analyzeOrderFlow(trades);
-    const vol = analyzeVolume(klines1h, ticker.price);
-    const struct = analyzeStructure(klines1h);
-    const spoof = detectSpoofing(STATE.depthHistory);
-    const hunts = detectStopHunts(klines1h);
-    const liquidityMap = buildLiquidityMap(klines1h, ticker.price);
-    const liquidationZones = estimateLiquidationZones(liquidityMap, ticker.price, klines1h);
-    const atr = calcATR(klines1h);
+    const vol = analyzeVolume(mainTF, ticker.price);
+    const struct = analyzeStructure(mainTF);
+    const tfAnalysis = analyzeTimeframes(tfKlines, ticker.price);
+    const tfConfl = tfConfluence(tfAnalysis);
+    const liqMap = buildLiquidityMap(mainTF, ticker.price);
+    const liqZones = estimateLiquidationZones(liqMap, ticker.price);
+    const atr = calcATR(mainTF);
 
-    // Multi-timeframe confirmation
-    const struct15m = analyzeStructure(klines15m);
-    const mtfBull = (struct.bosBull || struct.chochBull) && (struct15m.bosBull || struct15m.chochBull);
-    const mtfBear = (struct.bosBear || struct.chochBear) && (struct15m.bosBear || struct15m.chochBear);
+    const manip = {
+      spoof: detectSpoofing(STATE.depthHistory),
+      icebergs: detectIcebergs(trades),
+      wash: detectWashTrading(trades),
+      layering: detectLayering(depth),
+      stuffing: detectQuoteStuffing(STATE.depthHistory),
+      frontRun: detectFrontRunning(depth, trades),
+      recentHunts: detectAllStopHunts(tfKlines)
+    };
 
-    // Decision
-    const decision = decide(ob, of, vol, struct, spoof, hunts, ticker.price);
-    const trade = buildTradeLevels(decision.action, ticker.price, struct, ob, liquidityMap, atr);
+    const decision = decide(ob, of, vol, struct, tfConfl, manip, ticker.price);
+    const trade = buildTradeLevels(decision.action, ticker.price, struct, liqMap, atr);
 
-    render(ticker, ob, of, vol, struct, spoof, hunts, decision, trade, liquidityMap, liquidationZones, atr, mtfBull, mtfBear);
+    render(ticker, ob, of, vol, struct, tfAnalysis, tfConfl, liqMap, liqZones, manip, decision, trade, atr);
     log('Decision: ' + decision.action + ' (score ' + decision.score + ')', decision.action === 'WAIT' ? 'warn' : 'ok');
     document.getElementById('auto').textContent = 'analyzed at ' + new Date().toLocaleTimeString();
   } catch (e) {
@@ -718,124 +949,184 @@ async function run() {
     document.getElementById('output').innerHTML = `<div class="card" style="color:var(--red)">Error: ${e.message}</div>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Analyze';
+    btn.textContent = 'Full Analysis';
   }
 }
 
-function render(ticker, ob, of, vol, struct, spoof, hunts, decision, trade, liqMap, liqZones, atr, mtfBull, mtfBear) {
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(ticker, ob, of, vol, struct, tfAnalysis, tfConfl, liqMap, liqZones, manip, decision, trade, atr) {
   const out = document.getElementById('output');
   const priceUp = ticker.change >= 0;
   let html = '';
 
-  // ============ MAIN VERDICT ============
+  // VERDICT
   const vClass = decision.action === 'BUY' ? 'buy' : decision.action === 'SELL' ? 'sell' : 'wait';
   html += `<div class="verdict ${vClass}">`;
   html += `<div class="action">${decision.action}</div>`;
-  html += `<div class="confidence">Confidence: ${decision.confidence.toFixed(0)}%</div>`;
-  html += `<div class="score">${decision.reason}</div>`;
-
+  html += `<div class="confidence">Confidence ${decision.confidence.toFixed(0)}% · Score ${decision.score} · ${tfConfl.bull}B/${tfConfl.bear}S/${tfConfl.neutral}N TFs</div>`;
+  html += `<div class="score">${decision.action === 'BUY' ? 'Strong bullish confluence' : decision.action === 'SELL' ? 'Strong bearish confluence' : 'Insufficient confluence — stay out'}</div>`;
   if (trade) {
     html += '<div class="trade-levels">';
     html += `<div class="trade-level"><div class="k">ENTRY</div><div class="v">${fmt(trade.entry)}</div></div>`;
-    html += `<div class="trade-level"><div class="k">STOP LOSS</div><div class="v fail">${fmt(trade.stop)}</div></div>`;
-    html += `<div class="trade-level"><div class="k">TP1 (1.5R)</div><div class="v pass">${fmt(trade.tp1)}</div></div>`;
-    html += `<div class="trade-level"><div class="k">TP2 (2.5R)</div><div class="v pass">${fmt(trade.tp2)}</div></div>`;
-    html += `<div class="trade-level"><div class="k">TP3 (4R)</div><div class="v pass">${fmt(trade.tp3)}</div></div>`;
+    html += `<div class="trade-level"><div class="k">STOP</div><div class="v fail">${fmt(trade.stop)}</div></div>`;
+    html += `<div class="trade-level"><div class="k">TP1</div><div class="v pass">${fmt(trade.tp1)}</div></div>`;
+    html += `<div class="trade-level"><div class="k">TP2</div><div class="v pass">${fmt(trade.tp2)}</div></div>`;
+    html += `<div class="trade-level"><div class="k">TP3</div><div class="v pass">${fmt(trade.tp3)}</div></div>`;
     html += `<div class="trade-level"><div class="k">R:R</div><div class="v">${trade.rr.toFixed(2)}</div></div>`;
     html += '</div>';
   }
+  if (decision.manipPenalty > 0) {
+    html += `<div class="warn-box" style="margin-top:10px;color:var(--red);text-align:left">⚠ Manipulation detected — score reduced by ${decision.manipPenalty} points</div>`;
+  }
   html += '</div>';
 
-  // ============ WHY ============
+  // DECISION FACTORS
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Decision Factors (why this verdict)</h2>';
-  const bullFactors = decision.factors.filter(f => f.direction === 'bull');
-  const bearFactors = decision.factors.filter(f => f.direction === 'bear');
-  const neutralFactors = decision.factors.filter(f => f.direction === 'neutral');
-
-  for (const f of bullFactors) {
+  html += '<h2 style="margin-top:0">Decision Factors</h2>';
+  for (const f of decision.factors.filter(f => f.direction === 'bull')) {
     html += `<div class="factor bull"><div><span class="name">${f.name}</span><span class="detail">${f.detail}</span></div><div class="weight pass">+${f.weight}</div></div>`;
   }
-  for (const f of bearFactors) {
+  for (const f of decision.factors.filter(f => f.direction === 'bear')) {
     html += `<div class="factor bear"><div><span class="name">${f.name}</span><span class="detail">${f.detail}</span></div><div class="weight fail">${f.weight}</div></div>`;
   }
-  for (const f of neutralFactors) {
+  for (const f of decision.factors.filter(f => f.direction === 'neutral')) {
     html += `<div class="factor neutral"><div><span class="name">${f.name}</span><span class="detail">${f.detail}</span></div><div class="weight info">0</div></div>`;
   }
-  html += `<div class="row" style="margin-top:8px;font-weight:800"><span class="lbl">NET SCORE</span><span class="val ${decision.score>0?'pass':decision.score<0?'fail':''}">${decision.score>0?'+':''}${decision.score}</span></div>`;
-  html += `<div class="row"><span class="lbl">Multi-Timeframe</span><span class="val ${mtfBull?'pass':mtfBear?'fail':'info'}">${mtfBull?'BULL aligned':mtfBear?'BEAR aligned':'mixed'}</span></div>`;
   html += '</div>';
 
-  // ============ LIQUIDITY MAP ============
+  // MULTI-TIMEFRAME TABLE
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Liquidity Map (BSL / SSL)</h2>';
-  html += '<div class="row" style="font-weight:800"><span class="lbl">Current Price</span><span class="val cyan">' + fmt(ticker.price) + '</span></div>';
+  html += '<h2 style="margin-top:0">Multi-Timeframe Analysis</h2>';
+  html += '<table class="tf-table">';
+  html += '<tr><th>TF</th><th>Structure</th><th>Volume</th><th>Bias</th></tr>';
+  for (const tf of CFG.TIMEFRAMES) {
+    const a = tfAnalysis[tf];
+    if (!a) {
+      html += `<tr><td>${tf}</td><td colspan="3" class="tf-neutral">not loaded</td></tr>`;
+      continue;
+    }
+    const s = a.structure;
+    const tags = [];
+    if (s.bosBull) tags.push('BOS↑');
+    if (s.bosBear) tags.push('BOS↓');
+    if (s.chochBull) tags.push('CHoCH↑');
+    if (s.chochBear) tags.push('CHoCH↓');
+    if (s.sweepLow) tags.push('SweepL');
+    if (s.sweepHigh) tags.push('SweepH');
+    const volStr = a.volume.volMultiple.toFixed(1) + 'x';
+    const biasClass = a.bias === 'bull' ? 'tf-bull' : a.bias === 'bear' ? 'tf-bear' : 'tf-neutral';
+    const biasLabel = a.bias === 'bull' ? '▲ BULL' : a.bias === 'bear' ? '▼ BEAR' : '— NEUT';
+    html += `<tr><td>${tf}</td><td>${tags.join(' ') || '—'}</td><td>${volStr}</td><td class="${biasClass}">${biasLabel}</td></tr>`;
+  }
+  html += '</table>';
+  html += '</div>';
+
+  // LIQUIDITY MAP
+  html += '<div class="card">';
+  html += '<h2 style="margin-top:0">Liquidity Map</h2>';
+  html += `<div class="row" style="font-weight:800"><span class="lbl">Current Price</span><span class="val cyan">${fmt(ticker.price)}</span></div>`;
 
   if (liqMap.bsl.length > 0) {
-    html += '<div style="margin-top:8px;font-size:10px;color:var(--muted);font-weight:700">BUY-SIDE LIQUIDITY (above price — short stops)</div>';
+    html += '<div style="margin-top:8px;font-size:10px;color:var(--green);font-weight:700">BUY-SIDE LIQUIDITY (short stops above)</div>';
     for (const level of liqMap.bsl) {
       const dist = ((level.price - ticker.price) / ticker.price * 100).toFixed(2);
-      html += `<div class="liq-row"><div><span class="liq-level" style="color:var(--green)">${fmt(level.price)}</span><span class="liq-type bsl">BSL</span></div><span class="info">+${dist}% · ~$${fmt(level.estimatedLiquidity)} liq · ${level.touches} touches</span></div>`;
+      html += `<div class="liq-row"><div><span class="liq-level" style="color:var(--green)">${fmt(level.price)}</span><span class="liq-type bsl">BSL</span></div><span class="info">+${dist}% · ~$${fmt(level.vol)} · ${level.touches}×</span></div>`;
     }
   }
-
   if (liqMap.ssl.length > 0) {
-    html += '<div style="margin-top:12px;font-size:10px;color:var(--muted);font-weight:700">SELL-SIDE LIQUIDITY (below price — long stops)</div>';
+    html += '<div style="margin-top:12px;font-size:10px;color:var(--red);font-weight:700">SELL-SIDE LIQUIDITY (long stops below)</div>';
     for (const level of liqMap.ssl) {
       const dist = ((ticker.price - level.price) / ticker.price * 100).toFixed(2);
-      html += `<div class="liq-row"><div><span class="liq-level" style="color:var(--red)">${fmt(level.price)}</span><span class="liq-type ssl">SSL</span></div><span class="info">-${dist}% · ~$${fmt(level.estimatedLiquidity)} liq · ${level.touches} touches</span></div>`;
+      html += `<div class="liq-row"><div><span class="liq-level" style="color:var(--red)">${fmt(level.price)}</span><span class="liq-type ssl">SSL</span></div><span class="info">-${dist}% · ~$${fmt(level.vol)} · ${level.touches}×</span></div>`;
     }
-  }
-
-  if (liqMap.bsl.length === 0 && liqMap.ssl.length === 0) {
-    html += '<div class="info" style="padding:8px 0">No clear liquidity clusters in last 100 bars</div>';
   }
   html += '</div>';
 
-  // ============ LIQUIDATION ZONES ============
+  // LIQUIDATION ZONES
   html += '<div class="card">';
   html += '<h2 style="margin-top:0">Liquidation Zones (estimated)</h2>';
-  html += '<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Estimated from swing structure + historical volume. Binance does not expose real liquidation data via public REST — these are clusters where stop losses accumulate.</div>';
-
-  if (liqZones.shortLiq.length > 0) {
-    html += '<div style="font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px">SHORT LIQUIDATIONS (above price — short squeeze fuel)</div>';
-    for (const z of liqZones.shortLiq) {
-      html += `<div class="liq-row"><div><span class="liq-level">${fmt(z.price)}</span><span class="liq-type short-liq">SHORT LIQ</span></div><span class="info">+${z.distance}% · ~$${fmt(z.estimate)}</span></div>`;
+  html += '<div class="info-box">Estimated from swing structure + volume. Real liquidation data requires Binance Futures API.</div>';
+  if (liqZones.short.length > 0) {
+    html += '<div style="font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px">SHORT LIQUIDATIONS (above price)</div>';
+    for (const z of liqZones.short.slice(0, 4)) {
+      html += `<div class="liq-row"><div><span class="liq-level">${fmt(z.price)}</span><span class="liq-type bsl">SHORT LIQ</span></div><span class="info">+${z.distance}% · ~$${fmt(z.estimate)}</span></div>`;
     }
   }
-
-  if (liqZones.longLiq.length > 0) {
-    html += '<div style="margin-top:12px;font-size:10px;color:var(--red);font-weight:700;margin-bottom:4px">LONG LIQUIDATIONS (below price — long squeeze fuel)</div>';
-    for (const z of liqZones.longLiq) {
-      html += `<div class="liq-row"><div><span class="liq-level">${fmt(z.price)}</span><span class="liq-type long-liq">LONG LIQ</span></div><span class="info">-${z.distance}% · ~$${fmt(z.estimate)}</span></div>`;
+  if (liqZones.long.length > 0) {
+    html += '<div style="margin-top:12px;font-size:10px;color:var(--red);font-weight:700;margin-bottom:4px">LONG LIQUIDATIONS (below price)</div>';
+    for (const z of liqZones.long.slice(0, 4)) {
+      html += `<div class="liq-row"><div><span class="liq-level">${fmt(z.price)}</span><span class="liq-type ssl">LONG LIQ</span></div><span class="info">-${z.distance}% · ~$${fmt(z.estimate)}</span></div>`;
     }
   }
   html += '</div>';
 
-  // ============ ORDER BOOK ============
+  // DEEP ORDER BOOK
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Order Book (LIVE)</h2>';
-  html += '<div class="grid3">';
+  html += '<h2 style="margin-top:0">Order Book — 1000 Levels</h2>';
+  html += '<div class="grid4">';
+  html += `<div class="stat"><div class="k">IMB 20</div><div class="v ${ob.imb20>0.1?'pass':ob.imb20<-0.1?'fail':''}">${(ob.imb20*100).toFixed(0)}%</div></div>`;
+  html += `<div class="stat"><div class="k">IMB 100</div><div class="v ${ob.imb100>0.1?'pass':ob.imb100<-0.1?'fail':''}">${(ob.imb100*100).toFixed(0)}%</div></div>`;
+  html += `<div class="stat"><div class="k">IMB 500</div><div class="v ${ob.imb500>0.1?'pass':ob.imb500<-0.1?'fail':''}">${(ob.imb500*100).toFixed(0)}%</div></div>`;
   html += `<div class="stat"><div class="k">SPREAD</div><div class="v">${ob.spreadPct.toFixed(3)}%</div></div>`;
-  html += `<div class="stat"><div class="k">IMB (20)</div><div class="v ${ob.imb20>0.15?'pass':ob.imb20<-0.15?'fail':''}">${(ob.imb20*100).toFixed(0)}%</div></div>`;
-  html += `<div class="stat"><div class="k">IMB (50)</div><div class="v ${ob.imb50>0.15?'pass':ob.imb50<-0.15?'fail':''}">${(ob.imb50*100).toFixed(0)}%</div></div>`;
   html += '</div>';
-  html += '<div class="grid2" style="margin-top:6px">';
-  html += `<div class="stat"><div class="k">BID DEPTH</div><div class="v pass">$${fmt(ob.totalBidVol)}</div></div>`;
-  html += `<div class="stat"><div class="k">ASK DEPTH</div><div class="v fail">$${fmt(ob.totalAskVol)}</div></div>`;
-  html += '</div>';
-  html += '<div style="margin-top:8px;font-size:10px;color:var(--muted);font-weight:700">LARGEST WALLS</div>';
-  for (const w of ob.bidWalls) {
-    html += `<div class="row"><span class="lbl">BID @ ${fmt(w.price)}</span><span class="val pass">$${fmt(w.notional)} (${w.distance.toFixed(2)}% away)</span></div>`;
+  const bidPct = ob.totalBid / (ob.totalBid + ob.totalAsk) * 100;
+  html += `<div class="depth-bar"><div class="bid" style="width:${bidPct}%"></div><div class="ask" style="width:${100-bidPct}%"></div></div>`;
+  html += `<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:8px"><span class="pass">BIDS $${fmt(ob.totalBid)} (${bidPct.toFixed(1)}%)</span><span class="fail">ASKS $${fmt(ob.totalAsk)} (${(100-bidPct).toFixed(1)}%)</span></div>`;
+
+  html += '<div style="font-size:10px;color:var(--muted);font-weight:700;margin-top:8px">TOP 10 WALLS</div>';
+  for (const w of ob.walls.slice(0, 10)) {
+    const dist = Math.abs(w.price - ob.mid) / ob.mid * 100;
+    const cls = w.side === 'BID' ? 'pass' : 'fail';
+    html += `<div class="row"><span class="lbl">${w.side} @ ${fmt(w.price)}</span><span class="val ${cls}">$${fmt(w.notional)} (${dist.toFixed(2)}%)</span></div>`;
   }
-  for (const w of ob.askWalls) {
-    html += `<div class="row"><span class="lbl">ASK @ ${fmt(w.price)}</span><span class="val fail">$${fmt(w.notional)} (${w.distance.toFixed(2)}% away)</span></div>`;
+
+  html += '<div style="font-size:10px;color:var(--muted);font-weight:700;margin-top:8px">LIQUIDITY CLUSTERS (top 8)</div>';
+  for (const c of ob.clusters.slice(0, 8)) {
+    const dist = ((c.price - ob.mid) / ob.mid * 100).toFixed(2);
+    html += `<div class="row"><span class="lbl">${fmt(c.price)} (${dist > 0 ? '+' : ''}${dist}%)</span><span class="val">B:$${fmt(c.bid)} A:$${fmt(c.ask)}</span></div>`;
   }
   html += '</div>';
 
-  // ============ ORDER FLOW ============
+  // MANIPULATION
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Order Flow (LIVE trades)</h2>';
+  html += '<h2 style="margin-top:0">Manipulation Detection — 7 Detectors</h2>';
+
+  const detectors = [
+    { name: 'Spoofing', detected: manip.spoof.detected, detail: manip.spoof.reason },
+    { name: 'Icebergs', detected: manip.icebergs.length > 0, detail: manip.icebergs.length + ' found' },
+    { name: 'Wash Trading', detected: manip.wash.suspicious, detail: `${manip.wash.pct.toFixed(1)}% rapid alternate trades` },
+    { name: 'Layering', detected: !!(manip.layering.bid || manip.layering.ask), detail: manip.layering.bid ? 'bid side' : manip.layering.ask ? 'ask side' : 'none' },
+    { name: 'Quote Stuffing', detected: manip.stuffing.detected, detail: manip.stuffing.detected ? 'spread/vol unstable' : 'stable' },
+    { name: 'Front-Running', detected: !!manip.frontRun, detail: manip.frontRun ? manip.frontRun.type : 'none' },
+    { name: 'Stop Hunts', detected: manip.recentHunts.length > 0, detail: manip.recentHunts.length + ' recent' }
+  ];
+
+  for (const d of detectors) {
+    const cls = d.detected ? 'purple' : 'info';
+    const icon = d.detected ? '⚠' : '✓';
+    html += `<div class="row"><span class="lbl">${icon} ${d.name}</span><span class="val ${cls}">${d.detail}</span></div>`;
+  }
+
+  if (manip.icebergs.length > 0) {
+    html += '<div style="font-size:10px;color:var(--purple);font-weight:700;margin-top:8px">TOP ICEBERGS</div>';
+    for (const ice of manip.icebergs.slice(0, 3)) {
+      html += `<div class="row"><span class="lbl">${ice.side} @ ${fmt(ice.price)}</span><span class="val purple">${ice.count}× ~$${fmt(ice.notional)}</span></div>`;
+    }
+  }
+
+  if (manip.recentHunts.length > 0) {
+    html += '<div style="font-size:10px;color:var(--purple);font-weight:700;margin-top:8px">RECENT STOP HUNTS</div>';
+    for (const h of manip.recentHunts.slice(0, 4)) {
+      html += `<div class="row"><span class="lbl">${h.type} @ ${fmt(h.level)}</span><span class="val purple">${h.tf}</span></div>`;
+    }
+  }
+  html += '</div>';
+
+  // ORDER FLOW
+  html += '<div class="card">';
+  html += '<h2 style="margin-top:0">Order Flow — 1000 AggTrades</h2>';
   html += '<div class="grid3">';
   html += `<div class="stat"><div class="k">BUY VOL</div><div class="v pass">${fmt(of.buyVol)}</div></div>`;
   html += `<div class="stat"><div class="k">SELL VOL</div><div class="v fail">${fmt(of.sellVol)}</div></div>`;
@@ -852,9 +1143,9 @@ function render(ticker, ob, of, vol, struct, spoof, hunts, decision, trade, liqM
   html += '</div>';
   html += '</div>';
 
-  // ============ STRUCTURE ============
+  // STRUCTURE (1h main)
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Market Structure</h2>';
+  html += '<h2 style="margin-top:0">Market Structure (1h)</h2>';
   html += '<div style="margin-bottom:8px">';
   if (struct.bosBull) html += '<span class="tag on">BOS ↑</span>';
   if (struct.bosBear) html += '<span class="tag danger">BOS ↓</span>';
@@ -870,67 +1161,45 @@ function render(ticker, ob, of, vol, struct, spoof, hunts, decision, trade, liqM
   html += `<div class="row"><span class="lbl">Equilibrium</span><span class="val">${fmt(struct.equilibrium)}</span></div>`;
   html += `<div class="row"><span class="lbl">Recent High</span><span class="val">${fmt(struct.recentHigh)}</span></div>`;
   html += `<div class="row"><span class="lbl">Recent Low</span><span class="val">${fmt(struct.recentLow)}</span></div>`;
+  html += `<div class="row"><span class="lbl">ATR (14)</span><span class="val">${fmt(atr)}</span></div>`;
   html += '</div>';
 
-  // ============ VOLUME ============
+  // VOLUME PROFILE
   html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Volume Profile</h2>';
+  html += '<h2 style="margin-top:0">Volume Profile (1h)</h2>';
   html += '<div class="grid3">';
   html += `<div class="stat"><div class="k">VOL MULT</div><div class="v ${vol.volMultiple>2?'pass':vol.volMultiple>1.5?'warn':''}">${vol.volMultiple.toFixed(2)}x</div></div>`;
   html += `<div class="stat"><div class="k">POC</div><div class="v">${fmt(vol.poc)}</div></div>`;
   html += `<div class="stat"><div class="k">IN VALUE</div><div class="v ${vol.inValueArea?'pass':'fail'}">${vol.inValueArea?'YES':'NO'}</div></div>`;
   html += '</div>';
-  html += `<div class="row"><span class="lbl">Value Area High (VAH)</span><span class="val">${fmt(vol.vah)}</span></div>`;
-  html += `<div class="row"><span class="lbl">Value Area Low (VAL)</span><span class="val">${fmt(vol.val)}</span></div>`;
-  html += `<div class="row"><span class="lbl">Position vs POC</span><span class="val ${vol.abovePOC?'pass':'fail'}">${vol.abovePOC?'ABOVE':'BELOW'}</span></div>`;
-  if (vol.absorption) html += `<div class="row"><span class="lbl" style="color:var(--purple)">⚠ ABSORPTION</span><span class="val purple">${vol.absorption}</span></div>`;
+  html += `<div class="row"><span class="lbl">VAH</span><span class="val">${fmt(vol.vah)}</span></div>`;
+  html += `<div class="row"><span class="lbl">VAL</span><span class="val">${fmt(vol.val)}</span></div>`;
+  html += `<div class="row"><span class="lbl">vs POC</span><span class="val ${vol.abovePOC?'pass':'fail'}">${vol.abovePOC?'ABOVE':'BELOW'}</span></div>`;
+  if (vol.absorption) html += `<div class="row"><span class="lbl" style="color:var(--purple)">⚠ ${vol.absorption}</span></div>`;
   html += '</div>';
 
-  // ============ MANIPULATION ============
-  html += '<div class="card">';
-  html += '<h2 style="margin-top:0">Manipulation Detection</h2>';
-  html += `<div class="row"><span class="lbl">Spoofing</span><span class="val ${spoof.detected?'purple':'info'}">${spoof.reason}</span></div>`;
-  if (spoof.vanished && spoof.vanished.length > 0) {
-    for (const v of spoof.vanished.slice(0, 3)) {
-      html += `<div class="row"><span class="lbl">${v.side.toUpperCase()} wall @ ${fmt(v.price)}</span><span class="val purple">${fmt(v.qty)} vanished</span></div>`;
-    }
-  }
-  if (hunts.length > 0) {
-    html += `<div class="row"><span class="lbl" style="color:var(--purple)">Stop Hunts</span><span class="val purple">${hunts.length} recent</span></div>`;
-    for (const h of hunts.reverse()) {
-      html += `<div class="row"><span class="lbl">${h.type.replace('_',' ')} @ ${fmt(h.level)}</span></div>`;
-    }
-  } else {
-    html += `<div class="row"><span class="lbl">Stop Hunts</span><span class="val info">none recent</span></div>`;
-  }
-  html += '</div>';
+  // MARKET STATE
+  let state = 'NEUTRAL', stateDesc = 'mixed signals';
+  if (manip.spoof.detected || manip.wash.suspicious) { state = 'MANIPULATION'; stateDesc = 'unnatural order flow'; }
+  else if (struct.inDiscount && vol.volMultiple < 1.2) { state = 'ACCUMULATION'; stateDesc = 'low vol in discount'; }
+  else if (struct.inPremium && vol.volMultiple < 1.2) { state = 'DISTRIBUTION'; stateDesc = 'low vol in premium'; }
+  else if (vol.volMultiple >= 2.0) { state = 'EXPANSION'; stateDesc = 'high volume breakout'; }
+  else if (vol.inValueArea) { state = 'PREPARING'; stateDesc = 'coiling in value'; }
 
-  // ============ MARKET STATE ============
   html += '<div class="card">';
   html += '<h2 style="margin-top:0">Market State</h2>';
-  let state = 'NEUTRAL';
-  let stateDesc = '';
-  if (struct.inDiscount && vol.volMultiple < 1.2) { state = 'ACCUMULATION'; stateDesc = 'low volume, price in discount — institutions likely accumulating'; }
-  else if (struct.inPremium && vol.volMultiple < 1.2) { state = 'DISTRIBUTION'; stateDesc = 'low volume, price in premium — institutions likely distributing'; }
-  else if (spoof.detected) { state = 'MANIPULATION'; stateDesc = 'large orders vanishing — fake liquidity present'; }
-  else if (vol.volMultiple >= 2.0 && Math.abs(struct.equilibrium - ticker.price) / ticker.price > 0.02) { state = 'EXPANSION'; stateDesc = 'high volume away from equilibrium — trending move'; }
-  else if (vol.volMultiple >= 1.5 && vol.inValueArea) { state = 'PREPARING'; stateDesc = 'rising volume in value area — coiling before a move'; }
-  html += `<div style="text-align:center;font-size:20px;font-weight:800;color:var(--cyan);padding:12px 0">${state}</div>`;
-  html += `<div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:12px">${stateDesc}</div>`;
+  html += `<div style="text-align:center;font-size:22px;font-weight:800;color:var(--cyan);padding:14px 0">${state}</div>`;
+  html += `<div style="text-align:center;font-size:11px;color:var(--muted)">${stateDesc}</div>`;
   html += '</div>';
 
   out.innerHTML = html;
 }
 
-/* ============================================================
-   BOOT
-   ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sym').addEventListener('change', run);
-  log('Decision Engine ready', 'ok');
-  log('All data is LIVE from Binance', 'ok');
+  log('Advanced Engine ready — 8 TFs, deep book, 7 manipulation detectors', 'ok');
   run();
-  setInterval(() => { if (!document.hidden) run(); }, 30000);
+  setInterval(() => { if (!document.hidden) run(); }, 45000);
 });
 </script>
 </body>
