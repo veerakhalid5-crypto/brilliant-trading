@@ -2877,5 +2877,773 @@ setTimeout(init,700);
   else setTimeout(boot, 900);
 })();
 </script>
-</body>
+</body><!-- EDGE ANALYSIS ADD-ON — paste before </body>, after all existing scripts. -->
+<!-- If anything breaks, delete this entire block and your file returns to exactly working state. -->
+<script>
+(function(){
+  'use strict';
+
+  // ============================================================
+  // SAFE HELPERS (all prefixed to avoid collisions)
+  // ============================================================
+  const EDGE_KV = (k, v, c) => '<div class="kv"><span class="k">' + k + '</span><span class="v ' + (c || '') + '">' + v + '</span></div>';
+  const EDGE_PCT = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  const EDGE_NUM = n => (isFinite(n) ? n.toFixed(2) : '—');
+
+  function EDGE_pctChange(a, b) { return b ? (a - b) / b : 0; }
+
+  function EDGE_corr(xs, ys) {
+    const n = Math.min(xs.length, ys.length);
+    if (n < 20) return 0;
+    let sx = 0, sy = 0;
+    for (let i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; }
+    const mx = sx / n, my = sy / n;
+    let num = 0, dx = 0, dy = 0;
+    for (let i = 0; i < n; i++) {
+      const a = xs[i] - mx, b = ys[i] - my;
+      num += a * b; dx += a * a; dy += b * b;
+    }
+    return dx > 0 && dy > 0 ? num / Math.sqrt(dx * dy) : 0;
+  }
+
+  function EDGE_returns(klines, n) {
+    const out = [];
+    const start = Math.max(1, klines.length - n);
+    for (let i = start; i < klines.length; i++) {
+      out.push(EDGE_pctChange(klines[i].close, klines[i - 1].close));
+    }
+    return out;
+  }
+
+  // ============================================================
+  // FEATURE 1: CORRELATION MATRIX
+  // ============================================================
+  const EDGE_CORR_COINS = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','AVAXUSDT','DOGEUSDT','LINKUSDT','MATICUSDT'];
+
+  async function EDGE_fetchAllKlines() {
+    const out = {};
+    for (const sym of EDGE_CORR_COINS) {
+      try { out[sym] = await fetchKlines(sym, '1h', 200); }
+      catch (e) { out[sym] = null; }
+      await new Promise(r => setTimeout(r, 60));
+    }
+    return out;
+  }
+
+  function EDGE_correlationMatrix(all) {
+    const rets = {};
+    for (const sym in all) {
+      if (all[sym] && all[sym].length >= 50) rets[sym] = EDGE_returns(all[sym], 100);
+    }
+    const syms = Object.keys(rets);
+    const matrix = [];
+    for (let i = 0; i < syms.length; i++) {
+      const row = [];
+      for (let j = 0; j < syms.length; j++) {
+        row.push(i === j ? 1 : EDGE_corr(rets[syms[i]], rets[syms[j]]));
+      }
+      matrix.push({ symbol: syms[i], row });
+    }
+    return matrix;
+  }
+
+  function EDGE_renderCorrelation(matrix) {
+    if (!matrix.length) return '<div style="color:#848e9c;font-size:11px">Loading correlation data…</div>';
+    let h = '<table style="width:100%;border-collapse:collapse;font-size:9px;font-variant-numeric:tabular-nums">';
+    h += '<thead><tr><th></th>';
+    matrix.forEach(m => { h += '<th style="color:#848e9c;padding:3px 2px;font-weight:600">' + m.symbol.replace('USDT','') + '</th>'; });
+    h += '</tr></thead><tbody>';
+    matrix.forEach(m => {
+      h += '<tr><td style="color:#848e9c;padding:3px 4px;font-weight:600;text-align:left">' + m.symbol.replace('USDT','') + '</td>';
+      m.row.forEach(v => {
+        const abs = Math.abs(v);
+        let bg = 'transparent';
+        if (abs > 0.9) bg = v > 0 ? 'rgba(38,166,154,.55)' : 'rgba(239,83,80,.55)';
+        else if (abs > 0.7) bg = v > 0 ? 'rgba(38,166,154,.35)' : 'rgba(239,83,80,.35)';
+        else if (abs > 0.5) bg = v > 0 ? 'rgba(38,166,154,.18)' : 'rgba(239,83,80,.18)';
+        const txt = v === 1 ? '·' : v.toFixed(1).replace('0.', '.');
+        const color = abs > 0.7 ? '#fff' : '#d1d4dc';
+        h += '<td style="background:' + bg + ';color:' + color + ';text-align:center;padding:3px 1px;border:1px solid #0b0e11">' + txt + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="color:#848e9c;font-size:10px;margin-top:8px;line-height:1.5">';
+    h += '<b style="color:#26a69a">Dark green</b> = moves together (>0.9). <b style="color:#ef5350">Dark red</b> = moves opposite (<-0.9). ';
+    h += 'High positive correlation = same trade, do not stack. ';
+    h += 'Negative correlation = natural hedge. ';
+    h += 'Low correlation (&lt;0.5) = independent move, real diversification.';
+    h += '</div>';
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 2: VOLATILITY REGIME + STRATEGY SELECTOR
+  // ============================================================
+  function EDGE_volatilityRegime() {
+    if (!candles || candles.length < 50) return null;
+    const atr = atrCalc(candles, 14).filter(v => v != null);
+    if (atr.length < 30) return null;
+    const recentAtr = atr.slice(-20);
+    const olderAtr = atr.slice(-100, -20);
+    const recentAvg = recentAtr.reduce((a, b) => a + b, 0) / recentAtr.length;
+    const olderAvg = olderAtr.length ? olderAtr.reduce((a, b) => a + b, 0) / olderAtr.length : recentAvg;
+
+    const closes = candles.map(c => c.close);
+    const bbMid = sma(closes, 20);
+    const bbStd = stdev(closes, 20);
+    const lastMid = bbMid[bbMid.length - 1] || 0;
+    const lastStd = bbStd[bbStd.length - 1] || 0;
+    const bbWidth = lastMid > 0 ? (lastStd * 4) / lastMid : 0;
+
+    const widths = [];
+    for (let i = Math.max(20, closes.length - 100); i < closes.length; i++) {
+      const m = bbMid[i], s = bbStd[i];
+      if (m > 0 && s != null) widths.push((s * 4) / m);
+    }
+    const widthSorted = widths.slice().sort((a, b) => a - b);
+    const widthPct = widthSorted.length ? widthSorted.filter(w => w <= bbWidth).length / widthSorted.length : 0.5;
+
+    const atrRatio = olderAvg > 0 ? recentAvg / olderAvg : 1;
+
+    let regime, advice;
+    if (widthPct > 0.75 && atrRatio > 1.2) {
+      regime = 'EXPANSION';
+      advice = 'Trend following works. Breakouts hold. Trail stops.';
+    } else if (widthPct < 0.25 && atrRatio < 0.9) {
+      regime = 'COMPRESSION';
+      advice = 'Mean reversion works. Fade extremes. Small stops or a breakout is coming.';
+    } else if (widthPct > 0.6) {
+      regime = 'HIGH VOLATILITY';
+      advice = 'Reduce size. Wicks are larger. Wait for clean structure.';
+    } else {
+      regime = 'NORMAL';
+      advice = 'Standard setup. No regime edge in either direction.';
+    }
+
+    return { regime, advice, widthPct: widthPct * 100, atrRatio, bbWidth: bbWidth * 100 };
+  }
+
+  // ============================================================
+  // FEATURE 3: TIME-OF-DAY EDGE
+  // ============================================================
+  function EDGE_timeOfDay(klines) {
+    if (!klines || klines.length < 200) return null;
+    const buckets = {};
+    for (let h = 0; h < 24; h++) buckets[h] = { moves: [], count: 0 };
+
+    for (let i = 2; i < klines.length; i++) {
+      const hour = new Date(klines[i].time * 1000).getUTCHours();
+      const move = (klines[i].close - klines[i - 1].close) / klines[i - 1].close;
+      buckets[hour].moves.push(Math.abs(move));
+      buckets[hour].count++;
+    }
+
+    const hours = [];
+    for (let h = 0; h < 24; h++) {
+      const b = buckets[h];
+      if (b.count < 3) { hours.push({ hour: h, avgMove: 0, count: b.count }); continue; }
+      const avg = b.moves.reduce((a, x) => a + x, 0) / b.moves.length;
+      hours.push({ hour: h, avgMove: avg * 100, count: b.count });
+    }
+
+    const maxMove = Math.max.apply(null, hours.map(h => h.avgMove));
+    hours.forEach(h => { h.relative = maxMove > 0 ? h.avgMove / maxMove : 0; });
+    return hours;
+  }
+
+  function EDGE_renderTimeOfDay(hours) {
+    if (!hours) return '<div style="color:#848e9c;font-size:11px">Not enough history.</div>';
+    const curHour = new Date().getUTCHours();
+    let h = '<div style="font-size:10px;color:#848e9c;margin-bottom:8px">Bar chart shows average absolute move per UTC hour. Higher = more movement = better trading hour.</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(24,1fr);gap:1px;height:60px;align-items:end;margin-bottom:6px">';
+    hours.forEach(hh => {
+      const height = Math.max(2, hh.relative * 100);
+      const bg = hh.hour === curHour ? '#f0b90b' : hh.relative > 0.7 ? '#26a69a' : hh.relative > 0.4 ? '#78909c' : '#2a2e39';
+      h += '<div style="background:' + bg + ';height:' + height + '%;min-height:2px" title="' + hh.hour + ':00 · ' + hh.avgMove.toFixed(3) + '% avg"></div>';
+    });
+    h += '</div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#5e6673;margin-bottom:8px">';
+    h += '<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>';
+    h += '</div>';
+
+    const top = hours.slice().sort((a, b) => b.avgMove - a.avgMove).slice(0, 5);
+    h += '<div style="color:#848e9c;font-size:10px;font-weight:700;margin-bottom:4px">MOST ACTIVE HOURS:</div>';
+    top.forEach(t => {
+      const now = t.hour === curHour ? ' <span style="color:#f0b90b">● NOW</span>' : '';
+      h += EDGE_KV(t.hour + ':00 UTC', t.avgMove.toFixed(3) + '% avg · ' + t.count + ' samples' + now, t.relative > 0.7 ? 'pos' : '');
+    });
+
+    const low = hours.slice().sort((a, b) => a.avgMove - b.avgMove).slice(0, 3);
+    h += '<div style="color:#848e9c;font-size:10px;font-weight:700;margin:10px 0 4px">DEAD HOURS (avoid):</div>';
+    low.forEach(t => { if (t.count >= 3) h += EDGE_KV(t.hour + ':00 UTC', t.avgMove.toFixed(3) + '% avg', 'neg'); });
+
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 4: FUNDING EXTREMES SCANNER
+  // ============================================================
+  const EDGE_FUTURES = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','AVAXUSDT','DOGEUSDT','LINKUSDT','DOTUSDT','MATICUSDT','TRXUSDT','LTCUSDT','ATOMUSDT','NEARUSDT','APTUSDT','ARBUSDT','OPUSDT','SUIUSDT','INJUSDT','SEIUSDT','TIAUSDT','PEPEUSDT','WIFUSDT','JUPUSDT','RNDRUSDT','FETUSDT','IMXUSDT','STXUSDT','ORDIUSDT'];
+
+  async function EDGE_fetchFunding() {
+    const results = [];
+    for (const sym of EDGE_FUTURES) {
+      try {
+        const r = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=' + sym);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const rate = parseFloat(j.lastFundingRate) * 100;
+        if (!isFinite(rate)) continue;
+        results.push({ sym, rate });
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 40));
+    }
+    return results.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate));
+  }
+
+  function EDGE_renderFunding(list) {
+    if (!list.length) return '<div style="color:#848e9c;font-size:11px">Loading funding rates…</div>';
+    let h = '<div style="font-size:10px;color:#848e9c;margin-bottom:8px;line-height:1.5">Extreme funding = crowd is heavily positioned one way. Squeeze fuel.</div>';
+
+    const extreme = list.filter(x => Math.abs(x.rate) > 0.03).slice(0, 8);
+    if (extreme.length) {
+      h += '<div style="color:#f0b90b;font-size:10px;font-weight:700;margin-bottom:4px">⚠ EXTREME (fade candidate):</div>';
+      extreme.forEach(x => {
+        const dir = x.rate > 0 ? 'LONGS OVERCROWDED' : 'SHORTS OVERCROWDED';
+        const cls = x.rate > 0 ? 'neg' : 'pos';
+        h += EDGE_KV(x.sym.replace('USDT','') + ' ' + (x.rate >= 0 ? '+' : '') + x.rate.toFixed(3) + '%', dir, cls);
+      });
+    }
+
+    h += '<div style="color:#848e9c;font-size:10px;font-weight:700;margin:10px 0 4px">TOP 10 BY ABSOLUTE FUNDING:</div>';
+    list.slice(0, 10).forEach(x => {
+      const cls = x.rate > 0.01 ? 'neg' : x.rate < -0.01 ? 'pos' : '';
+      h += EDGE_KV(x.sym.replace('USDT',''), (x.rate >= 0 ? '+' : '') + x.rate.toFixed(4) + '%', cls);
+    });
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 5: PATTERN WIN-RATE BACKTEST
+  // ============================================================
+  function EDGE_backtestPatterns(klines) {
+    if (!klines || klines.length < 150) return null;
+    const patterns = { BOS: { wins: 0, total: 0 }, CHoCH: { wins: 0, total: 0 }, SWEEP: { wins: 0, total: 0 }, W: { wins: 0, total: 0 }, M: { wins: 0, total: 0 } };
+    const atr = atrCalc(klines, 14);
+
+    // BOS/CHoCH backtest
+    const structure = detectStructure(klines);
+    structure.forEach(ev => {
+      if (ev.i + 15 >= klines.length) return;
+      const a = atr[ev.i] || 0;
+      if (a <= 0) return;
+      const entry = klines[ev.i].close;
+      const target = ev.dir === 'up' ? entry + a * 1.5 : entry - a * 1.5;
+      const stop = ev.dir === 'up' ? entry - a : entry + a;
+      let outcome = null;
+      for (let j = ev.i + 1; j < Math.min(ev.i + 15, klines.length); j++) {
+        if (ev.dir === 'up') {
+          if (klines[j].low <= stop) { outcome = 'loss'; break; }
+          if (klines[j].high >= target) { outcome = 'win'; break; }
+        } else {
+          if (klines[j].high >= stop) { outcome = 'loss'; break; }
+          if (klines[j].low <= target) { outcome = 'win'; break; }
+        }
+      }
+      const key = ev.type === 'BOS' ? 'BOS' : 'CHoCH';
+      patterns[key].total++;
+      if (outcome === 'win') patterns[key].wins++;
+    });
+
+    // Sweep backtest (simplified)
+    const { highs, lows } = detectSwings(klines, 3);
+    highs.forEach(swing => {
+      for (let i = swing.i + 3; i < Math.min(klines.length - 15, swing.i + 40); i++) {
+        const bar = klines[i];
+        const body = Math.abs(bar.close - bar.open) || 1e-9;
+        const upperWick = bar.high - Math.max(bar.open, bar.close);
+        if (bar.high > swing.price && bar.close < swing.price && upperWick > body * 1.2) {
+          const a = atr[i] || 0;
+          if (a <= 0) break;
+          const entry = bar.close;
+          const target = entry - a * 1.5;
+          const stop = bar.high + a * 0.3;
+          let outcome = null;
+          for (let j = i + 1; j < Math.min(i + 15, klines.length); j++) {
+            if (klines[j].high >= stop) { outcome = 'loss'; break; }
+            if (klines[j].low <= target) { outcome = 'win'; break; }
+          }
+          patterns.SWEEP.total++;
+          if (outcome === 'win') patterns.SWEEP.wins++;
+          break;
+        }
+      }
+    });
+    lows.forEach(swing => {
+      for (let i = swing.i + 3; i < Math.min(klines.length - 15, swing.i + 40); i++) {
+        const bar = klines[i];
+        const body = Math.abs(bar.close - bar.open) || 1e-9;
+        const lowerWick = Math.min(bar.open, bar.close) - bar.low;
+        if (bar.low < swing.price && bar.close > swing.price && lowerWick > body * 1.2) {
+          const a = atr[i] || 0;
+          if (a <= 0) break;
+          const entry = bar.close;
+          const target = entry + a * 1.5;
+          const stop = bar.low - a * 0.3;
+          let outcome = null;
+          for (let j = i + 1; j < Math.min(i + 15, klines.length); j++) {
+            if (klines[j].low <= stop) { outcome = 'loss'; break; }
+            if (klines[j].high >= target) { outcome = 'win'; break; }
+          }
+          patterns.SWEEP.total++;
+          if (outcome === 'win') patterns.SWEEP.wins++;
+          break;
+        }
+      }
+    });
+
+    // W and M pattern backtest
+    for (let i = 60; i < klines.length - 20; i++) {
+      const slice = klines.slice(0, i + 1);
+      const w = (typeof detectWBottom === 'function') ? detectWBottom(slice) : null;
+      if (w && w.breakout) {
+        const a = atr[i] || 0;
+        if (a <= 0) continue;
+        const entry = klines[i].close;
+        const target = entry + a * 2;
+        const stop = w.neckline - a * 0.5;
+        let outcome = null;
+        for (let j = i + 1; j < Math.min(i + 20, klines.length); j++) {
+          if (klines[j].low <= stop) { outcome = 'loss'; break; }
+          if (klines[j].high >= target) { outcome = 'win'; break; }
+        }
+        patterns.W.total++;
+        if (outcome === 'win') patterns.W.wins++;
+        break;
+      }
+      const m = (typeof detectMTop === 'function') ? detectMTop(slice) : null;
+      if (m && m.breakout) {
+        const a = atr[i] || 0;
+        if (a <= 0) continue;
+        const entry = klines[i].close;
+        const target = entry - a * 2;
+        const stop = m.neckline + a * 0.5;
+        let outcome = null;
+        for (let j = i + 1; j < Math.min(i + 20, klines.length); j++) {
+          if (klines[j].high >= stop) { outcome = 'loss'; break; }
+          if (klines[j].low <= target) { outcome = 'win'; break; }
+        }
+        patterns.M.total++;
+        if (outcome === 'win') patterns.M.wins++;
+        break;
+      }
+    }
+
+    const out = [];
+    for (const k in patterns) {
+      const p = patterns[k];
+      if (p.total < 3) continue;
+      out.push({ pattern: k, wins: p.wins, total: p.total, rate: p.wins / p.total * 100 });
+    }
+    return out.sort((a, b) => b.rate - a.rate);
+  }
+
+  function EDGE_renderPatternStats(list) {
+    if (!list || !list.length) return '<div style="color:#848e9c;font-size:11px">Not enough samples on this timeframe.</div>';
+    let h = '<div style="font-size:10px;color:#848e9c;margin-bottom:8px;line-height:1.5">Historical win rate of each pattern ON THIS COIN on the current timeframe. Small samples = unreliable.</div>';
+    list.forEach(p => {
+      const rate = p.rate;
+      const cls = rate > 60 ? 'pos' : rate < 40 ? 'neg' : 'warn';
+      const barW = rate.toFixed(0);
+      h += '<div style="margin-bottom:8px">';
+      h += '<div style="display:flex;justify-content:space-between;font-size:11px"><span class="k" style="color:#848e9c">' + p.pattern + ' · ' + p.wins + 'W/' + p.total + '</span><span class="v ' + cls + '" style="font-weight:700">' + rate.toFixed(0) + '%</span></div>';
+      h += '<div style="height:4px;background:#1e2329;border-radius:2px;margin-top:3px;overflow:hidden"><div style="width:' + barW + '%;height:100%;background:' + (rate > 60 ? '#26a69a' : rate < 40 ? '#ef5350' : '#f0b90b') + '"></div></div>';
+      h += '</div>';
+    });
+    const best = list[0];
+    if (best && best.rate > 60) {
+      h += '<div style="color:#26a69a;font-size:10px;margin-top:8px">→ Best setup on this coin: ' + best.pattern + ' at ' + best.rate.toFixed(0) + '%</div>';
+    } else if (list.length) {
+      h += '<div style="color:#f0b90b;font-size:10px;margin-top:8px">→ No pattern has a strong edge on this timeframe. Consider a different TF.</div>';
+    }
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 6: ICEBERG DETECTOR
+  // ============================================================
+  async function EDGE_detectIcebergs() {
+    try {
+      const url = 'https://api.binance.com/api/v3/trades?symbol=' + currentSym + '&limit=1000';
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const trades = await r.json();
+      const byPrice = {};
+      trades.forEach(t => {
+        const key = parseFloat(t.price).toFixed(6);
+        if (!byPrice[key]) byPrice[key] = [];
+        byPrice[key].push({ qty: parseFloat(t.qty), isBuy: !t.isBuyerMaker, time: t.time });
+      });
+
+      const icebergs = [];
+      for (const price in byPrice) {
+        const t = byPrice[price];
+        if (t.length < 6) continue;
+        const sizes = t.map(x => x.qty);
+        const avg = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+        if (avg <= 0) continue;
+        const variance = sizes.reduce((s, x) => s + (x - avg) * (x - avg), 0) / sizes.length;
+        const cv = Math.sqrt(variance) / avg;
+        if (cv < 0.2 && t.length >= 6) {
+          const total = t.reduce((s, x) => s + x.qty, 0);
+          const buys = t.filter(x => x.isBuy).length;
+          icebergs.push({
+            price: parseFloat(price),
+            count: t.length,
+            total,
+            side: buys > t.length / 2 ? 'BUY' : 'SELL',
+            cv
+          });
+        }
+      }
+      return icebergs.sort((a, b) => b.total - a.total).slice(0, 5);
+    } catch (e) { return []; }
+  }
+
+  function EDGE_renderIcebergs(list) {
+    if (!list || !list.length) return '<div style="color:#848e9c;font-size:11px">No iceberg patterns in last 1000 trades.</div>';
+    let h = '<div style="font-size:10px;color:#848e9c;margin-bottom:8px;line-height:1.5">Repeated identical-size trades at the same price = hidden large order.</div>';
+    list.forEach(ice => {
+      const cls = ice.side === 'BUY' ? 'pos' : 'neg';
+      h += EDGE_KV(ice.side + ' @ ' + fmt(ice.price), ice.count + '× · ' + fmt(ice.total) + ' total · CV ' + ice.cv.toFixed(2), cls);
+    });
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 7: DELTA VELOCITY
+  // ============================================================
+  function EDGE_deltaVelocity() {
+    if (!candles || candles.length < 5) return null;
+    const recent = candles.slice(-5);
+    const velocities = [];
+    for (const bar of recent) {
+      const b = ofBuckets[bar.time];
+      if (!b) continue;
+      const total = b.buy + b.sell;
+      if (total <= 0) continue;
+      velocities.push({
+        time: bar.time,
+        delta: (b.buy - b.sell) / total,
+        close: bar.close
+      });
+    }
+    if (velocities.length < 2) return null;
+
+    let change = 0;
+    for (let i = 1; i < velocities.length; i++) {
+      change += velocities[i].delta - velocities[i - 1].delta;
+    }
+    return {
+      current: velocities[velocities.length - 1].delta,
+      velocity: change / (velocities.length - 1),
+      bars: velocities.length
+    };
+  }
+
+  // ============================================================
+  // FEATURE 8: S/R STRENGTH SCORING
+  // ============================================================
+  function EDGE_scoreSR(klines) {
+    if (!klines || klines.length < 100) return [];
+    const { highs, lows } = detectSwings(klines, 5);
+    const levels = [...highs.map(h => ({ price: h.price, i: h.i, type: 'R' })), ...lows.map(l => ({ price: l.price, i: l.i, type: 'S' }))];
+    const clusters = [];
+    levels.forEach(lvl => {
+      let found = false;
+      for (const cl of clusters) {
+        if (Math.abs(cl.price - lvl.price) / cl.price < 0.003) {
+          cl.price = (cl.price * cl.touches + lvl.price) / (cl.touches + 1);
+          cl.touches++;
+          cl.lastTouch = Math.max(cl.lastTouch || 0, lvl.i);
+          cl.types.add(lvl.type);
+          found = true;
+          break;
+        }
+      }
+      if (!found) clusters.push({ price: lvl.price, touches: 1, lastTouch: lvl.i, types: new Set([lvl.type]) });
+    });
+
+    const currentPrice = klines[klines.length - 1].close;
+    const lastIdx = klines.length - 1;
+
+    // Score: touches × recency × volume-at-touch
+    clusters.forEach(cl => {
+      const recency = Math.exp(-(lastIdx - cl.lastTouch) / 50);
+      const distFromPrice = Math.abs(cl.price - currentPrice) / currentPrice;
+      const proximity = Math.exp(-distFromPrice * 20);
+      cl.score = cl.touches * recency * proximity * 100;
+    });
+
+    return clusters.sort((a, b) => b.score - a.score).slice(0, 6);
+  }
+
+  function EDGE_renderSR(clusters) {
+    if (!clusters || !clusters.length) return '<div style="color:#848e9c;font-size:11px">No clear levels.</div>';
+    let h = '<div style="font-size:10px;color:#848e9c;margin-bottom:8px">Ranked by strength (touches × recency × proximity).</div>';
+    const currentPrice = candles[candles.length - 1].close;
+    clusters.forEach(cl => {
+      const dist = (cl.price - currentPrice) / currentPrice * 100;
+      const role = cl.price > currentPrice ? 'RESISTANCE' : 'SUPPORT';
+      const cls = cl.price > currentPrice ? 'neg' : 'pos';
+      h += EDGE_KV(role + ' @ ' + fmt(cl.price), cl.touches + '× touches · ' + (dist >= 0 ? '+' : '') + dist.toFixed(2) + '% · score ' + cl.score.toFixed(0), cls);
+    });
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 9: POC MIGRATION
+  // ============================================================
+  function EDGE_pocMigration(klines) {
+    if (!klines || klines.length < 100) return null;
+    const windows = [];
+    for (let i = 60; i <= klines.length - 20; i += 20) {
+      const slice = klines.slice(i - 60, i);
+      const hi = Math.max.apply(null, slice.map(k => k.high));
+      const lo = Math.min.apply(null, slice.map(k => k.low));
+      const range = hi - lo;
+      if (range <= 0) continue;
+      const N = 20, step = range / N;
+      const vol = new Array(N).fill(0);
+      slice.forEach(b => {
+        const mid = (b.high + b.low) / 2;
+        const idx = Math.min(N - 1, Math.max(0, Math.floor((mid - lo) / step)));
+        vol[idx] += b.volume;
+      });
+      let pocIdx = 0;
+      for (let k = 1; k < N; k++) if (vol[k] > vol[pocIdx]) pocIdx = k;
+      const poc = lo + (pocIdx + 0.5) * step;
+      windows.push({ time: klines[i - 1].time, poc });
+    }
+    if (windows.length < 2) return null;
+
+    let trend = 0;
+    for (let i = 1; i < windows.length; i++) trend += windows[i].poc - windows[i - 1].poc;
+    trend /= (windows.length - 1);
+
+    const latest = windows[windows.length - 1].poc;
+    const earliest = windows[0].poc;
+    const totalMigration = (latest - earliest) / earliest * 100;
+
+    return { windows, trend, totalMigration, currentPoc: latest };
+  }
+
+  function EDGE_renderPOCMigration(m) {
+    if (!m) return '<div style="color:#848e9c;font-size:11px">Not enough data.</div>';
+    let h = '';
+    const dir = m.trend > 0 ? 'RISING' : m.trend < 0 ? 'FALLING' : 'FLAT';
+    const cls = m.trend > 0 ? 'pos' : m.trend < 0 ? 'neg' : 'warn';
+    const meaning = m.trend > 0 ? 'Institutions accumulating higher — bullish structure'
+                  : m.trend < 0 ? 'Institutions distributing lower — bearish structure'
+                  : 'Value stable — no clear institutional bias';
+    h += EDGE_KV('POC direction', dir + ' (' + m.trend.toFixed(2) + ' per window)', cls);
+    h += EDGE_KV('Total migration', (m.totalMigration >= 0 ? '+' : '') + m.totalMigration.toFixed(2) + '%', cls);
+    h += EDGE_KV('Interpretation', meaning, cls);
+    h += '<div style="color:#848e9c;font-size:10px;margin-top:8px">POC = the price with the most volume. When it moves up, institutions are buying higher. When it moves down, they are selling lower.</div>';
+    return h;
+  }
+
+  // ============================================================
+  // FEATURE 10: MARKET BREADTH
+  // ============================================================
+  async function EDGE_marketBreadth() {
+    const coins = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','AVAXUSDT','DOGEUSDT','LINKUSDT','DOTUSDT','MATICUSDT','TRXUSDT','LTCUSDT','ATOMUSDT','NEARUSDT'];
+    let above = 0, below = 0, total = 0;
+    for (const sym of coins) {
+      try {
+        const k = await fetchKlines(sym, '1h', 50);
+        if (k.length < 20) continue;
+        const closes = k.map(c => c.close);
+        const ema20 = ema(closes, 20);
+        const lastEma = ema20[ema20.length - 1];
+        const lastClose = closes[closes.length - 1];
+        if (lastEma != null) {
+          if (lastClose > lastEma) above++;
+          else below++;
+          total++;
+        }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return { above, below, total, pct: total > 0 ? (above / total) * 100 : 0 };
+  }
+
+  function EDGE_renderBreadth(b) {
+    if (!b || b.total === 0) return '<div style="color:#848e9c;font-size:11px">Loading breadth…</div>';
+    const cls = b.pct > 60 ? 'pos' : b.pct < 40 ? 'neg' : 'warn';
+    const label = b.pct > 70 ? 'BROAD RISK-ON' : b.pct > 55 ? 'RISK-ON' : b.pct < 30 ? 'BROAD RISK-OFF' : b.pct < 45 ? 'RISK-OFF' : 'MIXED';
+    let h = '';
+    h += EDGE_KV('Coins above EMA20', b.above + ' / ' + b.total + ' (' + b.pct.toFixed(0) + '%)', cls);
+    h += EDGE_KV('Market state', label, cls);
+    h += '<div style="height:6px;background:#1e2329;border-radius:3px;margin-top:8px;overflow:hidden"><div style="width:' + b.pct.toFixed(0) + '%;height:100%;background:' + (b.pct > 55 ? '#26a69a' : b.pct < 45 ? '#ef5350' : '#f0b90b') + '"></div></div>';
+    h += '<div style="color:#848e9c;font-size:10px;margin-top:8px">When most coins are above their 20-EMA, longs have tailwind. When most are below, longs are fighting the tide.</div>';
+    return h;
+  }
+
+  // ============================================================
+  // MASTER RENDER
+  // ============================================================
+  let EDGE_busy = false;
+  let EDGE_cache = { corr: null, corrTime: 0, funding: null, fundingTime: 0, breadth: null, breadthTime: 0 };
+
+  async function EDGE_render() {
+    if (EDGE_busy) return;
+    EDGE_busy = true;
+    const out = document.getElementById('edgeContent');
+    if (!out) { EDGE_busy = false; return; }
+
+    try {
+      // Regime (fast, local)
+      const reg = EDGE_volatilityRegime();
+      if (reg) {
+        document.getElementById('edgeRegime').innerHTML =
+          EDGE_KV('Regime', reg.regime, reg.regime === 'EXPANSION' ? 'pos' : reg.regime === 'COMPRESSION' ? 'warn' : reg.regime === 'HIGH VOLATILITY' ? 'neg' : '') +
+          EDGE_KV('Bollinger width', reg.bbWidth.toFixed(2) + '% (' + reg.widthPct.toFixed(0) + 'th percentile)') +
+          EDGE_KV('ATR ratio vs prior', reg.atrRatio.toFixed(2) + '×') +
+          '<div style="color:#26a69a;font-size:10px;margin-top:8px;line-height:1.5">→ ' + reg.advice + '</div>';
+      } else {
+        document.getElementById('edgeRegime').innerHTML = '<div style="color:#848e9c;font-size:11px">Not enough data.</div>';
+      }
+
+      // Time of day (fast, local)
+      const hist = await fetchKlines(currentSym, currentTF, 500).catch(() => candles);
+      const tod = EDGE_timeOfDay(hist);
+      document.getElementById('edgeTOD').innerHTML = EDGE_renderTimeOfDay(tod);
+
+      // Pattern backtest (fast, local)
+      const pat = EDGE_backtestPatterns(hist);
+      document.getElementById('edgePatterns').innerHTML = EDGE_renderPatternStats(pat);
+
+      // Icebergs (network)
+      const ice = await EDGE_detectIcebergs();
+      document.getElementById('edgeIcebergs').innerHTML = EDGE_renderIcebergs(ice);
+
+      // Delta velocity (fast, local)
+      const dv = EDGE_deltaVelocity();
+      if (dv) {
+        const cls = dv.velocity > 0.1 ? 'pos' : dv.velocity < -0.1 ? 'neg' : '';
+        const interpret = dv.velocity > 0.15 ? 'Buying accelerating — bullish'
+                        : dv.velocity < -0.15 ? 'Selling accelerating — bearish'
+                        : dv.velocity > 0.05 ? 'Buying slowing down'
+                        : dv.velocity < -0.05 ? 'Selling slowing down'
+                        : 'Stable';
+        document.getElementById('edgeVelocity').innerHTML =
+          EDGE_KV('Current delta', (dv.current * 100).toFixed(0) + '%', dv.current > 0 ? 'pos' : 'neg') +
+          EDGE_KV('Velocity', (dv.velocity * 100).toFixed(1) + '% per bar', cls) +
+          EDGE_KV('Interpretation', interpret, cls) +
+          '<div style="color:#848e9c;font-size:10px;margin-top:8px">Velocity is the RATE OF CHANGE of delta. It leads price because flow changes before price does.</div>';
+      } else {
+        document.getElementById('edgeVelocity').innerHTML = '<div style="color:#848e9c;font-size:11px">Need more bars.</div>';
+      }
+
+      // S/R strength (fast, local)
+      const sr = EDGE_scoreSR(hist);
+      document.getElementById('edgeSR').innerHTML = EDGE_renderSR(sr);
+
+      // POC migration (fast, local)
+      const poc = EDGE_pocMigration(hist);
+      document.getElementById('edgePOC').innerHTML = EDGE_renderPOCMigration(poc);
+
+      // Slow network calls, cached
+      const now = Date.now();
+      if (now - EDGE_cache.corrTime > 300000 || !EDGE_cache.corr) {
+        document.getElementById('edgeCorr').innerHTML = '<div style="color:#848e9c;font-size:11px"><span class="loader"></span>Loading correlation matrix…</div>';
+        const all = await EDGE_fetchAllKlines();
+        EDGE_cache.corr = EDGE_correlationMatrix(all);
+        EDGE_cache.corrTime = now;
+      }
+      document.getElementById('edgeCorr').innerHTML = EDGE_renderCorrelation(EDGE_cache.corr);
+
+      if (now - EDGE_cache.fundingTime > 60000 || !EDGE_cache.funding) {
+        document.getElementById('edgeFunding').innerHTML = '<div style="color:#848e9c;font-size:11px"><span class="loader"></span>Scanning funding rates…</div>';
+        EDGE_cache.funding = await EDGE_fetchFunding();
+        EDGE_cache.fundingTime = now;
+      }
+      document.getElementById('edgeFunding').innerHTML = EDGE_renderFunding(EDGE_cache.funding);
+
+      if (now - EDGE_cache.breadthTime > 60000 || !EDGE_cache.breadth) {
+        document.getElementById('edgeBreadth').innerHTML = '<div style="color:#848e9c;font-size:11px"><span class="loader"></span>Computing breadth…</div>';
+        EDGE_cache.breadth = await EDGE_marketBreadth();
+        EDGE_cache.breadthTime = now;
+      }
+      document.getElementById('edgeBreadth').innerHTML = EDGE_renderBreadth(EDGE_cache.breadth);
+
+    } catch (e) {
+      console.error('EDGE render error:', e);
+    }
+
+    EDGE_busy = false;
+  }
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  function EDGE_boot() {
+    const tabBar = document.getElementById('tabBar');
+    const panelContent = document.getElementById('panelContent');
+    if (!tabBar || !panelContent) { setTimeout(EDGE_boot, 500); return; }
+
+    const btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.dataset.t = 'edge';
+    btn.textContent = 'EDGE';
+    const ref = tabBar.querySelector('.tab[data-t="alerts"]') || null;
+    tabBar.insertBefore(btn, ref);
+
+    btn.onclick = () => {
+      if (activeTab === 'edge' && document.getElementById('panel').classList.contains('on')) { closePanel(); return; }
+      openTab('edge');
+      EDGE_render();
+    };
+
+    const pane = document.createElement('div');
+    pane.className = 'pane';
+    pane.id = 'p-edge';
+    pane.innerHTML =
+      '<div class="card"><h4>◆ Volatility Regime + Strategy Selector</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Tells you which style works right now</div><div id="edgeRegime"></div></div>' +
+      '<div class="card"><h4>◆ Market Breadth</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">% of top 15 coins above 20-EMA</div><div id="edgeBreadth"></div></div>' +
+      '<div class="card"><h4>◆ Pattern Win-Rate Backtest</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Historical win rate of each setup ON THIS COIN</div><div id="edgePatterns"></div></div>' +
+      '<div class="card"><h4>◆ S/R Strength Ranking</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Ranked by touches × recency × proximity</div><div id="edgeSR"></div></div>' +
+      '<div class="card"><h4>◆ POC Migration</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Is institutional value moving up or down?</div><div id="edgePOC"></div></div>' +
+      '<div class="card"><h4>◆ Delta Velocity</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Rate-of-change of flow — a leading indicator</div><div id="edgeVelocity"></div></div>' +
+      '<div class="card"><h4>◆ Iceberg Detector</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Hidden large orders detected from tape</div><div id="edgeIcebergs"></div></div>' +
+      '<div class="card"><h4>◆ Time-of-Day Edge</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">When does this coin actually move?</div><div id="edgeTOD"></div></div>' +
+      '<div class="card"><h4>◆ Correlation Matrix</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Which coins move together — avoid double exposure</div><div id="edgeCorr"></div></div>' +
+      '<div class="card"><h4>◆ Funding Extremes Scanner</h4><div style="color:#848e9c;font-size:10px;margin-bottom:8px">Scan 30 futures for crowd pain</div><div id="edgeFunding"></div></div>';
+    panelContent.appendChild(pane);
+
+    document.getElementById('edgeContent') = pane;
+
+    // Refresh when tab is open, every 30 seconds
+    setInterval(() => {
+      if (activeTab === 'edge') {
+        if (document.getElementById('edgeRegime')) {
+          const reg = EDGE_volatilityRegime();
+          if (reg) {
+            document.getElementById('edgeRegime').innerHTML =
+              EDGE_KV('Regime', reg.regime, reg.regime === 'EXPANSION' ? 'pos' : reg.regime === 'COMPRESSION' ? 'warn' : reg.regime === 'HIGH VOLATILITY' ? 'neg' : '') +
+              EDGE_KV('Bollinger width', reg.bbWidth.toFixed(2) + '% (' + reg.widthPct.toFixed(0) + 'th percentile)') +
+              EDGE_KV('ATR ratio vs prior', reg.atrRatio.toFixed(2) + '×') +
+              '<div style="color:#26a69a;font-size:10px;margin-top:8px;line-height:1.5">→ ' + reg.advice + '</div>';
+          }
+        }
+      }
+    }, 30000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(EDGE_boot, 1000));
+  else setTimeout(EDGE_boot, 1000);
+})();
+</script>
 </html>
