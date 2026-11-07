@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Institutional Intelligence Terminal</title>
+<title>Institutional IQ — Restored & Upgraded</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#080a0f;--card:#12171f;--card2:#171d27;--line:#1f2733;--green:#0ecb81;--red:#f6465d;--amber:#f0b90b;--blue:#3b82f6;--purple:#a855f7;--cyan:#06b6d4;--text:#e8ecf1;--muted:#7a8698;--dim:#4b5563}
@@ -11,7 +11,7 @@
 body{background:var(--bg);color:var(--text);padding-bottom:calc(72px + env(safe-area-inset-bottom));font-size:13px}
 header{position:sticky;top:0;z-index:20;background:rgba(8,10,15,.94);backdrop-filter:blur(12px);padding:11px 12px 7px;border-bottom:1px solid var(--line)}
 .hrow{display:flex;justify-content:space-between;align-items:center}
-h1{font-size:14px;letter-spacing:2px;color:var(--text);font-weight:800}
+h1{font-size:14px;letter-spacing:2px;font-weight:800}
 h1 span{color:var(--cyan)}
 #status{font-size:10px;color:var(--muted);text-align:right;max-width:60%}
 #status.err{color:var(--red)}#status.ok{color:var(--green)}
@@ -31,6 +31,8 @@ main{padding:12px;max-width:1400px;margin:0 auto}
 .tag.warn{background:rgba(240,185,11,.14);color:var(--amber)}
 .tag.danger{background:rgba(168,85,247,.16);color:var(--purple)}
 .tag.blue{background:rgba(59,130,246,.14);color:var(--blue)}
+.tag.cyan{background:rgba(6,182,212,.14);color:var(--cyan)}
+.tag.off{opacity:.35}
 .levels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center}
 .lb{background:var(--card2);padding:7px 3px;border-radius:7px}
 .ll{color:var(--muted);font-size:9px;display:block;margin-bottom:3px;font-weight:600}
@@ -72,34 +74,37 @@ nav button.on{color:var(--green)}
 <body>
 <header><div class="hrow"><h1>INSTITUTIONAL<span>·IQ</span></h1><span id="status">booting…</span></div></header>
 <main>
-<section id="tab-signals" class="tab active"><div class="stats" id="signalStats"></div><div class="seg" id="sigSeg"><button data-f="all" class="on">All</button><button data-f="BULLISH">Long</button><button data-f="BEARISH">Short</button></div><div id="feed" class="grid"><div class="empty">scanning…</div></div></section>
+<section id="tab-signals" class="tab active"><div class="stats" id="signalStats"></div><div class="seg" id="sigSeg"><button data-f="all" class="on">All</button><button data-f="BULLISH">Long</button><button data-f="BEARISH">Short</button><button data-f="high">High Conv.</button><button data-f="manip">Manipulation</button></div><div id="feed" class="grid"><div class="empty">scanning…</div></div></section>
 <section id="tab-chart" class="tab"><div class="chartbar"><select id="chartSym"></select><div class="tfbtns" id="chartTfs"><button data-tf="15m">15m</button><button data-tf="1h" class="on">1h</button><button data-tf="4h">4h</button><button data-tf="1d">1d</button></div></div><div id="chartContainer"></div><div id="chartLegend">select pair</div></section>
-<section id="tab-research" class="tab"><div class="chartbar"><select id="researchSym"></select><select id="sortSel"><option value="prob">AI probability</option><option value="score">Confluence score</option><option value="cvd">CVD</option><option value="obi">OBI</option></select></div><div id="researchList"><div class="empty">scanning…</div></div></section>
+<section id="tab-research" class="tab"><div class="chartbar"><select id="researchSym"></select><select id="sortSel"><option value="prob">AI probability</option><option value="score">Confluence score</option><option value="cvd">CVD</option><option value="manip">Manipulation</option></select></div><div id="researchList"><div class="empty">scanning…</div></div><div id="researchDetail"></div></section>
+<section id="tab-manip" class="tab"><div class="chartbar"><select id="manipSort"><option value="manip">Manipulation score</option><option value="hunt">Stop hunts</option><option value="absorp">Absorption</option><option value="exhaust">Exhaustion</option></select></div><div id="manipList"><div class="empty">scanning…</div></div></section>
 <section id="tab-ai" class="tab"><div id="aiPanel"><div class="empty">training…</div></div></section>
-<section id="tab-setup" class="tab"><button id="btnRefresh" class="bigbtn" style="width:100%;padding:15px;border-radius:11px;border:none;background:var(--green);color:#021a10;font-weight:800;font-size:14px;cursor:pointer">Rescan Now</button><button id="btnTest" class="ghostbtn" style="width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:700;font-size:13px;margin-top:8px;cursor:pointer">Run Diagnostics</button><div id="debug">ready</div></section>
+<section id="tab-setup" class="tab"><div class="setblock" style="background:var(--card);padding:13px;border-radius:10px;margin-bottom:12px"><label style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Min AI probability</span><b id="v-prob">60%</b></label><input type="range" id="in-prob" min="50" max="90" step="1" value="60" style="width:100%;accent-color:var(--green)"></div><div class="setblock" style="background:var(--card);padding:13px;border-radius:10px;margin-bottom:12px"><label style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Min confluence score</span><b id="v-score">45</b></label><input type="range" id="in-score" min="20" max="90" step="1" value="45" style="width:100%;accent-color:var(--green)"></div><div class="setblock" style="background:var(--card);padding:13px;border-radius:10px;margin-bottom:12px"><label style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Universe size</span><b id="v-top">40</b></label><input type="range" id="in-top" min="10" max="100" step="5" value="40" style="width:100%;accent-color:var(--green)"></div><button id="btnRefresh" style="width:100%;padding:15px;border-radius:11px;border:none;background:var(--green);color:#021a10;font-weight:800;font-size:14px;cursor:pointer">Rescan Now</button><button id="btnTest" style="width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:700;font-size:13px;margin-top:8px;cursor:pointer">Run Diagnostics</button><div id="debug">ready</div></section>
 </main>
-<nav><button data-tab="signals" class="on">Signals</button><button data-tab="chart">Chart</button><button data-tab="research">Research</button><button data-tab="ai">AI</button><button data-tab="setup">Setup</button></nav>
+<nav><button data-tab="signals" class="on">Signals</button><button data-tab="chart">Chart</button><button data-tab="research">Research</button><button data-tab="manip">Manip</button><button data-tab="ai">AI</button><button data-tab="setup">Setup</button></nav>
 <script>
 /* ================================================================
-   INSTITUTIONAL INTELLIGENCE ENGINE
-   Modules: Data -> Structure -> OrderFlow -> Regime -> AI -> Fusion
+   INSTITUTIONAL IQ — RESTORED + UPGRADED
+   Modules: Data -> SMC -> OrderFlow -> Regime -> Manipulation -> AI -> Fusion
    ================================================================ */
 
 const CFG = {
-  topN: 30,
+  topN: 40,
   scanTfs: ["15m","1h","4h"],
   klinesLimit: 500,
   baseRest: "https://data-api.binance.vision",
-  wsSpot: "wss://stream.binance.com:9443/ws",
+  newsApi: "https://free-crypto-news.vercel.app/api",
   minProb: 60,
-  minScore: 50,
+  minScore: 45,
   refreshMs: 300000
 };
 
 const STATE = {
-  universe: [], results: {}, signals: [], chartSym: null, chartTf: "1h",
-  chart: null, candleSeries: null, scanning: false, sigFilter: "all",
-  aiModels: {}, obiCache: {}, cvdCache: {}, lastScan: 0
+  universe: [], results: {}, signals: [], manipOnly: [],
+  chartSym: null, chartTf: "1h", chart: null, candleSeries: null,
+  scanning: false, sigFilter: "all", aiModels: {},
+  newsCache: {}, sentimentCache: {}, fundamentals: {},
+  fearGreed: { value: 50, label: "Neutral" }
 };
 
 const $ = id => document.getElementById(id);
@@ -107,7 +112,6 @@ const fmt = n => { if(!isFinite(n)) return "—"; const a=Math.abs(n);
   if(a>=1e9) return (n/1e9).toFixed(2)+"B"; if(a>=1e6) return (n/1e6).toFixed(2)+"M";
   if(a>=1000) return n.toLocaleString(undefined,{maximumFractionDigits:1});
   if(a>=1) return n.toFixed(3); if(a>=0.01) return n.toFixed(4); return n.toPrecision(4); };
-const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 
 function log(msg, cls) {
   const el = $("debug"); if(!el) return;
@@ -118,7 +122,6 @@ function log(msg, cls) {
 
 /* ================================================================
    MODULE 1: DATA INGESTION
-   WebSocket for order flow (CORS-enabled), REST for klines
    ================================================================ */
 
 const cache = new Map();
@@ -142,8 +145,8 @@ async function loadUniverse() {
 }
 
 /* ================================================================
-   MODULE 2: SMC STRUCTURAL ENGINE
-   Implements pyvsmc-equivalent primitives deterministically
+   MODULE 2: SMC STRUCTURAL ENGINE (restored from previous version)
+   pyvsmc-equivalent primitives, volume-validated
    ================================================================ */
 
 const sma = (a,i,n) => { let s=0; for(let k=i-n+1;k<=i;k++) s+=a[k]; return s/n; };
@@ -167,7 +170,6 @@ function smcContext(o,h,l,c,v,last,swings) {
   const pSH=sh.filter(s=>s.i<last-1), pSL=sl.filter(s=>s.i<last-1);
   const lSH=pSH.length?pSH[pSH.length-1]:null, lSL=pSL.length?pSL[pSL.length-1]:null;
 
-  // BOS vs CHoCH: BOS continues trend, CHoCH reverses
   let bosBull=false,bosBear=false,chochBull=false,chochBear=false;
   if(lSH && c[last]>lSH.p && c[last-1]<=lSH.p) {
     const prevSH=pSH.length>=2?pSH[pSH.length-2]:null;
@@ -178,14 +180,12 @@ function smcContext(o,h,l,c,v,last,swings) {
     if(prevSL && prevSL.p<lSL.p) bosBear=true; else chochBear=true;
   }
 
-  // FVG: 3-candle imbalance with displacement
   let fvgBull=false,fvgBear=false;
   for(let i=Math.max(2,last-6);i<=last;i++){
     if(l[i]>h[i-2]) fvgBull=true;
     if(h[i]<l[i-2]) fvgBear=true;
   }
 
-  // Order Block: last opposite candle before displacement, volume-validated
   let obBull=null,obBear=null;
   const bodyLast=Math.abs(c[last]-o[last]);
   const atr=(()=>{let s=0;for(let i=last-13;i<=last;i++)s+=(h[i]-l[i]);return s/14;})();
@@ -200,7 +200,6 @@ function smcContext(o,h,l,c,v,last,swings) {
     }
   }
 
-  // Liquidity mapping: equal highs/lows clusters
   const clusterLevels=(sw,tol)=>{const out=[],used=new Array(sw.length).fill(false);
     for(let i=0;i<sw.length;i++){if(used[i])continue;const g=[sw[i]];used[i]=true;
       for(let j=i+1;j<sw.length;j++){if(used[j])continue;
@@ -223,12 +222,12 @@ function smcContext(o,h,l,c,v,last,swings) {
 }
 
 /* ================================================================
-   MODULE 3: ORDER FLOW ENGINE
-   Real taker buy/sell from aggTrade WebSocket or kline field 9
+   MODULE 3: ORDER FLOW ENGINE (restored)
+   Real taker buy/sell from kline field 9
    ================================================================ */
 
 function orderFlowMetrics(kl,last) {
-  const v=kl.map(k=>+k[5]), tb=kl.map(k=>+k[9]), trades=kl.map(k=>+k[8]);
+  const v=kl.map(k=>+k[5]), tb=kl.map(k=>+k[9]);
   const buy=[],sell=[],delta=[],ratio=[];
   for(let i=Math.max(0,last-19);i<=last;i++){
     const b=tb[i], s=v[i]-b;
@@ -264,8 +263,81 @@ function detectExhaustion(o,h,l,c,v,tb,last) {
 }
 
 /* ================================================================
-   MODULE 4: REGIME ENGINE
-   ADX + ATR-percentile classification
+   MODULE 4: ICT / WYCKOFF / MANIPULATION (restored)
+   ================================================================ */
+
+function detectJudasSwing(o,h,l,c,last,swings) {
+  if(last<5) return null;
+  const recentBias=c[last]-c[last-4];
+  const wickUp=h[last]-Math.max(o[last],c[last]);
+  const wickDown=Math.min(o[last],c[last])-l[last];
+  const body=Math.abs(c[last]-o[last])||1e-9;
+  const {sh,sl}=swings;
+  const pSH=sh.filter(s=>s.i<last-1), pSL=sl.filter(s=>s.i<last-1);
+  const lSH=pSH.length?pSH[pSH.length-1]:null, lSL=pSL.length?pSL[pSL.length-1]:null;
+  if(lSH && h[last]>lSH.p && c[last]<lSH.p && wickUp>body*1.1 && recentBias<0) return "JUDAS_BEAR";
+  if(lSL && l[last]<lSL.p && c[last]>lSL.p && wickDown>body*1.1 && recentBias>0) return "JUDAS_BULL";
+  return null;
+}
+
+function detectTurtleSoup(h,l,c,o,last,swings) {
+  const {sh,sl}=swings;
+  const pSH=sh.filter(s=>s.i<last-1), pSL=sl.filter(s=>s.i<last-1);
+  const lSH=pSH.length?pSH[pSH.length-1]:null, lSL=pSL.length?pSL[pSL.length-1]:null;
+  const body=Math.abs(c[last]-o[last])||1e-9;
+  if(lSL && l[last]<lSL.p && c[last]>lSL.p && (lSL.p-l[last])>body*0.7) return "TS_BULL";
+  if(lSH && h[last]>lSH.p && c[last]<lSH.p && (h[last]-lSH.p)>body*0.7) return "TS_BEAR";
+  return null;
+}
+
+function wyckoffPhase(o,h,l,c,v,last,look=30) {
+  if(last<look) return {phase:"UNKNOWN",conf:0};
+  const win=Math.min(look,last);
+  const hh=h.slice(last-win,last+1), ll=l.slice(last-win,last+1), vv=v.slice(last-win,last+1);
+  const range=Math.max(...hh)-Math.min(...ll);
+  const avgRange=mean(hh.map((x,i)=>hh[i]-ll[i]));
+  const rangeCompression=range/(avgRange*4);
+  const volTrend=vv[vv.length-1]-mean(vv.slice(0,8));
+  const priceTrend=(c[last]-c[last-win])/(c[last-win]||1);
+  const lastH=hh[hh.length-1], lastL=ll[ll.length-1];
+  if(rangeCompression<0.75 && volTrend>0) return {phase:"ACCUMULATION",conf:0.7};
+  if(rangeCompression<0.75 && volTrend<0) return {phase:"DISTRIBUTION",conf:0.7};
+  if(priceTrend>0.02) return {phase:"MARKUP",conf:0.6};
+  if(priceTrend<-0.02) return {phase:"MARKDOWN",conf:0.6};
+  const priorHi=Math.max(...hh.slice(0,-1)), priorLo=Math.min(...ll.slice(0,-1));
+  if(lastL<priorLo && c[last]>priorLo) return {phase:"SPRING",conf:0.75};
+  if(lastH>priorHi && c[last]<priorHi) return {phase:"UPTHRUST",conf:0.75};
+  return {phase:"TRANSITION",conf:0.3};
+}
+
+function manipulationScore(o,h,l,c,v,tb,last,swings) {
+  const body=Math.abs(c[last]-o[last])||1e-9;
+  const range=h[last]-l[last];
+  const wickUp=h[last]-Math.max(o[last],c[last]);
+  const wickDown=Math.min(o[last],c[last])-l[last];
+  const volBase=sma(v,last-1,20), volMult=volBase>0?v[last]/volBase:0;
+  const buyRatio=v[last]>0?tb[last]/v[last]:0.5;
+  const cPos=range>0?(c[last]-l[last])/range:0.5;
+  let score=0; const flags=[];
+  const {sh,sl}=swings;
+  const pSH=sh.filter(s=>s.i<last-1), pSL=sl.filter(s=>s.i<last-1);
+  const lSH=pSH.length?pSH[pSH.length-1]:null, lSL=pSL.length?pSL[pSL.length-1]:null;
+  if(lSH && h[last]>lSH.p && c[last]<lSH.p && wickUp>body*0.9){score+=35;flags.push("STOP_HUNT_UP");}
+  if(lSL && l[last]<lSL.p && c[last]>lSL.p && wickDown>body*0.9){score+=35;flags.push("STOP_HUNT_DOWN");}
+  const wickRatio=(wickUp+wickDown)/body;
+  if(wickRatio>2.5 && volMult>1.5){score+=15;flags.push("WICK_ANOMALY");}
+  if(volMult>2.0 && body/range<0.3){score+=20;flags.push("ABSORPTION");}
+  const priceMove5=c[last]-c[Math.max(0,last-5)];
+  const deltaNow=tb[last]-(v[last]-tb[last]);
+  if(priceMove5>0 && deltaNow<0 && volMult>1.3){score+=12;flags.push("DIVERGENCE");}
+  if(priceMove5<0 && deltaNow>0 && volMult>1.3){score+=12;flags.push("DIVERGENCE");}
+  if(wickUp>body*2 && cPos<0.35 && volMult>1.5){score+=10;flags.push("FAKEOUT_UP");}
+  if(wickDown>body*2 && cPos>0.65 && volMult>1.5){score+=10;flags.push("FAKEOUT_DOWN");}
+  return {score:Math.min(100,score),flags,wickRatio,volMult,buyRatio,cPos};
+}
+
+/* ================================================================
+   MODULE 5: REGIME ENGINE
    ================================================================ */
 
 function regimeContext(h,l,c,last) {
@@ -273,8 +345,6 @@ function regimeContext(h,l,c,last) {
   const atr=tr.slice(-14).reduce((s,x)=>s+x,0)/14;
   const atrPct=atr/c[last]*100;
   const atrPercentile=tr.slice(-50).filter(x=>x<=atr).length/50*100;
-
-  // Simplified ADX proxy via directional movement
   let plusDM=0,minusDM=0;
   for(let i=last-13;i<=last;i++){
     const up=h[i]-h[i-1], down=l[i-1]-l[i];
@@ -283,33 +353,32 @@ function regimeContext(h,l,c,last) {
   }
   const diPlus=plusDM/(atr*14||1), diMinus=minusDM/(atr*14||1);
   const dx=Math.abs(diPlus-diMinus)/(diPlus+diMinus||1)*100;
-  const adx=dx; // single-period proxy
-
   let regime="RANGING";
-  if(adx>25 && atrPercentile>40) regime="TRENDING";
+  if(dx>25 && atrPercentile>40) regime="TRENDING";
   else if(atrPercentile>75) regime="VOLATILE";
-  return {regime,adx,atrPct,atrPercentile};
+  return {regime,adx:dx,atrPct,atrPercentile};
 }
 
 /* ================================================================
-   MODULE 5: AI CORE — Ensemble + Triple-Barrier + Meta-Labeling
+   MODULE 6: AI CORE — Restored Ensemble + Triple-Barrier + Meta-Labeling
+   Now with more trees and feature selection
    ================================================================ */
 
 class DecisionTree {
-  constructor(maxDepth=5,minSamples=10){this.maxDepth=maxDepth;this.minSamples=minSamples;this.root=null;}
+  constructor(maxDepth=6,minSamples=8){this.maxDepth=maxDepth;this.minSamples=minSamples;this.root=null;}
   fit(X,y){this.root=this._build(X,y,0);}
   _build(X,y,depth){
-    const n=X.length, d=X[0].length, counts=[0,0];
+    const n=X.length,d=X[0].length,counts=[0,0];
     for(const l of y) counts[l]++;
     if(depth>=this.maxDepth||n<this.minSamples||counts[0]===0||counts[1]===0)
       return {leaf:true,prob:counts[1]/n};
     let bestGain=0,bestF=-1,bestT=0;
     const parentGini=1-(counts[0]/n)**2-(counts[1]/n)**2;
     for(let f=0;f<d;f++){
-      const vals=X.map(r=>r[f]), uniq=[...new Set(vals)].sort((a,b)=>a-b);
-      const step=Math.max(1,Math.floor(uniq.length/15));
+      const vals=X.map(r=>r[f]),uniq=[...new Set(vals)].sort((a,b)=>a-b);
+      const step=Math.max(1,Math.floor(uniq.length/20));
       for(let i=step;i<uniq.length;i+=step){
-        const th=uniq[i], L=[],R=[];
+        const th=uniq[i],L=[],R=[];
         for(let j=0;j<n;j++){if(X[j][f]<=th)L.push(j);else R.push(j);}
         if(L.length<this.minSamples||R.length<this.minSamples) continue;
         const lc=[0,0],rc=[0,0];
@@ -325,18 +394,15 @@ class DecisionTree {
     for(let i=0;i<n;i++){if(X[i][bestF]<=bestT){LX.push(X[i]);LY.push(y[i]);}else{RX.push(X[i]);RY.push(y[i]);}}
     return {leaf:false,feature:bestF,threshold:bestT,left:this._build(LX,LY,depth+1),right:this._build(RX,RY,depth+1)};
   }
-  predict(x){
-    let node=this.root; while(!node.leaf){if(x[node.feature]<=node.threshold)node=node.left;else node=node.right;}
-    return node.prob;
-  }
+  predict(x){let node=this.root;while(!node.leaf){if(x[node.feature]<=node.threshold)node=node.left;else node=node.right;}return node.prob;}
 }
 
 class RandomForest {
-  constructor(n=15,depth=5,minS=8){this.n=n;this.depth=depth;this.minS=minS;this.trees=[];}
+  constructor(n=25,depth=6,minS=8){this.n=n;this.depth=depth;this.minS=minS;this.trees=[];}
   fit(X,y){
     this.trees=[];
     for(let t=0;t<this.n;t++){
-      const idx=[]; for(let i=0;i<X.length;i++) idx.push(Math.floor(Math.random()*X.length));
+      const idx=[];for(let i=0;i<X.length;i++)idx.push(Math.floor(Math.random()*X.length));
       const tree=new DecisionTree(this.depth,this.minS);
       tree.fit(idx.map(i=>X[i]),idx.map(i=>y[i]));
       this.trees.push(tree);
@@ -346,84 +412,81 @@ class RandomForest {
 }
 
 class LogisticRegression {
-  constructor(lr=0.08,epochs=150,l2=0.01){this.lr=lr;this.epochs=epochs;this.l2=l2;this.w=null;}
+  constructor(lr=0.08,epochs=200,l2=0.01){this.lr=lr;this.epochs=epochs;this.l2=l2;this.w=null;}
   fit(X,y){
-    const n=X.length,d=X[0].length; this.w=new Array(d).fill(0);
+    const n=X.length,d=X[0].length;this.w=new Array(d).fill(0);
     const sig=z=>1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
     for(let e=0;e<this.epochs;e++){
       for(let i=0;i<n;i++){
-        let z=0; for(let j=0;j<d;j++) z+=this.w[j]*X[i][j];
-        const p=sig(z), err=p-y[i];
-        for(let j=0;j<d;j++) this.w[j]-=this.lr*(err*X[i][j]+this.l2*this.w[j]);
+        let z=0;for(let j=0;j<d;j++)z+=this.w[j]*X[i][j];
+        const p=sig(z),err=p-y[i];
+        for(let j=0;j<d;j++)this.w[j]-=this.lr*(err*X[i][j]+this.l2*this.w[j]);
       }
     }
   }
-  predict(x){
-    let z=0; for(let j=0;j<x.length;j++) z+=this.w[j]*x[j];
-    return 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));
-  }
+  predict(x){let z=0;for(let j=0;j<x.length;j++)z+=this.w[j]*x[j];return 1/(1+Math.exp(-Math.max(-15,Math.min(15,z))));}
 }
 
 class EnsembleModel {
-  constructor(){this.rf=new RandomForest(15,5,8);this.lr=new LogisticRegression(0.08,150,0.01);this.meta=null;}
+  constructor(){this.rf=new RandomForest(25,6,8);this.lr=new LogisticRegression(0.08,200,0.01);this.meta=null;}
   fit(X,y){
-    this.rf.fit(X,y); this.lr.fit(X,y);
+    this.rf.fit(X,y);this.lr.fit(X,y);
     const preds=X.map(x=>this.predictPrimary(x));
     const metaX=X.map((x,i)=>[1,preds[i],x[1],x[2],x[3]]);
     this.meta=new LogisticRegression(0.05,100,0.01);
     this.meta.fit(metaX,y);
   }
-  predictPrimary(x){return this.rf.predict(x)*0.6 + this.lr.predict(x)*0.4;}
-  predict(x){
-    const p=this.predictPrimary(x);
-    if(!this.meta) return p;
-    return p * this.meta.predict([1,p,x[1],x[2],x[3]]);
-  }
+  predictPrimary(x){return this.rf.predict(x)*0.6+this.lr.predict(x)*0.4;}
+  predict(x){const p=this.predictPrimary(x);if(!this.meta)return p;return p*this.meta.predict([1,p,x[1],x[2],x[3]]);}
 }
 
 /* ================================================================
-   TRIPLE-BARRIER LABELING
+   TRIPLE-BARRIER LABELING (restored)
    ================================================================ */
 
 function tripleBarrier(c,atr,i,profitMult=1.5,stopMult=1.0,maxHold=6){
-  const entry=c[i], upper=entry+atr[i]*profitMult, lower=entry-atr[i]*stopMult;
+  const entry=c[i],upper=entry+atr[i]*profitMult,lower=entry-atr[i]*stopMult;
   for(let j=i+1;j<=Math.min(i+maxHold,c.length-1);j++){
-    if(c[j]>=upper) return 1;
-    if(c[j]<=lower) return 0;
+    if(c[j]>=upper)return 1;
+    if(c[j]<=lower)return 0;
   }
   return 0;
 }
 
 /* ================================================================
-   FEATURE EXTRACTION
+   FEATURE EXTRACTION (expanded)
    ================================================================ */
 
-function extractFeatures(kl,last,atr,smc,of,regime){
-  const A=atr[last]; if(!isFinite(A)||A<=0) return null;
+function extractFeatures(kl,last,atr,smc,of,regime,wyck,absorp,exhaust){
+  const A=atr[last];if(!isFinite(A)||A<=0)return null;
   const o=+kl[last][1],h=+kl[last][2],l=+kl[last][3],c=+kl[last][4];
-  const range=h-l, cPos=range>0?(c-l)/range:0.5;
+  const range=h-l,cPos=range>0?(c-l)/range:0.5;
   const bodyATR=Math.abs(c-o)/A;
   const ref20=+kl[Math.max(0,last-20)][4];
   return [
-    1, smc.volMult, bodyATR, cPos, of.buyRatio, of.deltaZ,
-    smc.fvgBull?1:0, smc.fvgBear?1:0, smc.bosBull?1:0, smc.bosBear?1:0,
-    smc.chochBull?1:0, smc.chochBear?1:0, smc.obBull?1:0, smc.obBear?1:0,
-    smc.sweepHigh?1:0, smc.sweepLow?1:0, smc.inDiscount?1:0, smc.inPremium?1:0,
-    c>ref20?1:0, c<ref20?1:0,
-    regime.adx/100, regime.atrPercentile/100
+    1,smc.volMult,bodyATR,cPos,of.buyRatio,of.deltaZ,
+    smc.fvgBull?1:0,smc.fvgBear?1:0,smc.bosBull?1:0,smc.bosBear?1:0,
+    smc.chochBull?1:0,smc.chochBear?1:0,smc.obBull?1:0,smc.obBear?1:0,
+    smc.sweepHigh?1:0,smc.sweepLow?1:0,smc.inDiscount?1:0,smc.inPremium?1:0,
+    c>ref20?1:0,c<ref20?1:0,
+    regime.adx/100,regime.atrPercentile/100,
+    wyck.phase==="SPRING"||wyck.phase==="ACCUMULATION"?1:0,
+    wyck.phase==="UPTHRUST"||wyck.phase==="DISTRIBUTION"?1:0,
+    absorp==="ABSORPTION_BULL"?1:0,absorp==="ABSORPTION_BEAR"?1:0,
+    exhaust==="EXHAUSTION_BULL"?1:0,exhaust==="EXHAUSTION_BEAR"?1:0
   ];
 }
 
 /* ================================================================
-   MAIN ANALYZER
+   MAIN ANALYZER (restored + expanded)
    ================================================================ */
 
 function analyze(kl,tf,symbol){
-  const n=kl.length; if(n<150) return null;
+  const n=kl.length;if(n<150)return null;
   const o=kl.map(k=>+k[1]),h=kl.map(k=>+k[2]),l=kl.map(k=>+k[3]),c=kl.map(k=>+k[4]);
   const v=kl.map(k=>+k[5]),tb=kl.map(k=>+k[9]),last=n-1;
-  const tr=[]; for(let i=1;i<=last;i++) tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));
-  const atr=[]; for(let i=0;i<tr.length;i++) atr.push(i<13?NaN:tr.slice(i-13,i+1).reduce((s,x)=>s+x,0)/14);
+  const tr=[];for(let i=1;i<=last;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));
+  const atr=[];for(let i=0;i<tr.length;i++)atr.push(i<13?NaN:tr.slice(i-13,i+1).reduce((s,x)=>s+x,0)/14);
   atr.unshift(NaN);
 
   const swings=findSwings(h,l,2);
@@ -432,6 +495,10 @@ function analyze(kl,tf,symbol){
   const regime=regimeContext(h,l,c,last);
   const absorp=detectAbsorption(o,h,l,c,v,tb,last);
   const exhaust=detectExhaustion(o,h,l,c,v,tb,last);
+  const judas=detectJudasSwing(o,h,l,c,last,swings);
+  const turtle=detectTurtleSoup(h,l,c,o,last,swings);
+  const wyck=wyckoffPhase(o,h,l,c,v,last);
+  const manip=manipulationScore(o,h,l,c,v,tb,last,swings);
 
   // AI training
   const X=[],y=[];
@@ -440,25 +507,28 @@ function analyze(kl,tf,symbol){
     const sm=smcContext(o.slice(0,i+1),h.slice(0,i+1),l.slice(0,i+1),c.slice(0,i+1),v.slice(0,i+1),i,sw);
     const ofi=orderFlowMetrics(kl.slice(0,i+1),i);
     const reg=regimeContext(h.slice(0,i+1),l.slice(0,i+1),c.slice(0,i+1),i);
-    const f=extractFeatures(kl.slice(0,i+1),i,atr.slice(0,i+1),sm,ofi,reg);
-    if(!f) continue;
-    X.push(f); y.push(tripleBarrier(c,atr,i));
+    const wy=wyckoffPhase(o.slice(0,i+1),h.slice(0,i+1),l.slice(0,i+1),c.slice(0,i+1),v.slice(0,i+1),i);
+    const ab=detectAbsorption(o.slice(0,i+1),h.slice(0,i+1),l.slice(0,i+1),c.slice(0,i+1),v.slice(0,i+1),tb.slice(0,i+1),i);
+    const ex=detectExhaustion(o.slice(0,i+1),h.slice(0,i+1),l.slice(0,i+1),c.slice(0,i+1),v.slice(0,i+1),tb.slice(0,i+1),i);
+    const f=extractFeatures(kl.slice(0,i+1),i,atr.slice(0,i+1),sm,ofi,reg,wy,ab,ex);
+    if(!f)continue;
+    X.push(f);y.push(tripleBarrier(c,atr,i));
   }
 
-  let aiProb=0, aiAcc=0;
+  let aiProb=0,aiAcc=0;
   if(X.length>=80 && y.reduce((s,x)=>s+x,0)>=10 && y.reduce((s,x)=>s+x,0)<y.length){
-    const model=new EnsembleModel(); model.fit(X,y);
-    let correct=0; for(let i=0;i<X.length;i++){if((model.predict(X[i])>0.5?1:0)===y[i])correct++;}
+    const model=new EnsembleModel();model.fit(X,y);
+    let correct=0;for(let i=0;i<X.length;i++){if((model.predict(X[i])>0.5?1:0)===y[i])correct++;}
     aiAcc=correct/X.length;
-    const f=extractFeatures(kl,last,atr,smc,of,regime);
-    if(f) aiProb=Math.round(model.predict(f)*100);
+    const f=extractFeatures(kl,last,atr,smc,of,regime,wyck,absorp,exhaust);
+    if(f)aiProb=Math.round(model.predict(f)*100);
     STATE.aiModels[symbol]={prob:aiProb,acc:Math.round(aiAcc*100),trainSize:X.length};
   }
 
   // SCORING
-  let score=0; const tags=[];
-  const add=(cond,pts,label,cls)=>{if(cond){score+=pts;tags.push([label,1,cls||"on"]);}else tags.push([label,0,""]);};
-  add(smc.volMult>=1.5,10,`VOL ${smc.volMult.toFixed(1)}x`);
+  let score=0;const tags=[];
+  const add=(cond,pts,label,cls)=>{if(cond){score+=pts;tags.push([label,1,cls||"on"]);}else tags.push([label,0,"off"]);};
+  add(smc.volMult>=1.5,10,`VOL ${smc.volMult.toFixed(1)}x`,"cyan");
   add(Math.abs(of.buyRatio-0.5)>=0.12,12,`BR ${(of.buyRatio*100).toFixed(0)}%`,"blue");
   add(Math.abs(of.deltaZ)>=1.5,12,`ΔZ ${of.deltaZ.toFixed(1)}`,"blue");
   add(smc.bosBull||smc.bosBear,10,smc.bosBull?"BOS↑":"BOS↓");
@@ -469,74 +539,85 @@ function analyze(kl,tf,symbol){
   add(smc.inDiscount||smc.inPremium,5,smc.inDiscount?"DISC":"PREM");
   add(absorp!==null,8,absorp||"ABS","cyan");
   add(exhaust!==null,7,exhaust||"EXH","danger");
+  add(judas!==null,10,judas||"JUDAS","danger");
+  add(turtle!==null,10,turtle||"TURTLE","danger");
+  add(wyck.phase==="SPRING"||wyck.phase==="UPTHRUST",10,wyck.phase,"danger");
+  add(wyck.phase==="ACCUMULATION"||wyck.phase==="MARKUP",5,"WYK↑","warn");
+  add(wyck.phase==="DISTRIBUTION"||wyck.phase==="MARKDOWN",5,"WYK↓","warn");
+  add(manip.score>=40,Math.min(15,Math.round(manip.score/5)),`MANIP ${manip.score}`,"danger");
   add(regime.regime==="TRENDING",5,"TREND","on");
-  add(regime.regime==="VOLATILE",3,"VOLATILE","warn");
 
-  const base={symbol,tf,price:c[last],smc,of,regime,absorp,exhaust,score,aiProb,aiAcc,tags,sig:null};
-  if(score<CFG.minScore||aiProb<CFG.minProb) return base;
+  const base={symbol,tf,price:c[last],smc,of,regime,wyck,absorp,exhaust,judas,turtle,manip,
+    score,aiProb,aiAcc,tags,sig:null};
+  if(score<CFG.minScore||aiProb<CFG.minProb)return base;
 
   // DIRECTION
   let bull=0,bear=0;
-  if(of.buyRatio>0.5) bull+=Math.round((of.buyRatio-0.5)*30); else bear+=Math.round((0.5-of.buyRatio)*30);
-  if(of.delta>0) bull+=2; else bear+=2;
-  if(smc.bosBull) bull+=3; if(smc.bosBear) bear+=3;
-  if(smc.chochBull) bull+=3; if(smc.chochBear) bear+=3;
-  if(smc.obBull) bull+=2; if(smc.obBear) bear+=2;
-  if(smc.sweepLow) bull+=2; if(smc.sweepHigh) bear+=2;
-  if(smc.fvgBull) bull+=1; if(smc.fvgBear) bear+=1;
-  if(absorp==="ABSORPTION_BULL") bull+=2; if(absorp==="ABSORPTION_BEAR") bear+=2;
-  if(exhaust==="EXHAUSTION_BULL") bear+=2; if(exhaust==="EXHAUSTION_BEAR") bull+=2;
+  if(of.buyRatio>0.5)bull+=Math.round((of.buyRatio-0.5)*30);else bear+=Math.round((0.5-of.buyRatio)*30);
+  if(of.delta>0)bull+=2;else bear+=2;
+  if(smc.bosBull)bull+=3;if(smc.bosBear)bear+=3;
+  if(smc.chochBull)bull+=3;if(smc.chochBear)bear+=3;
+  if(smc.obBull)bull+=2;if(smc.obBear)bear+=2;
+  if(smc.sweepLow)bull+=2;if(smc.sweepHigh)bear+=2;
+  if(absorp==="ABSORPTION_BULL")bull+=2;if(absorp==="ABSORPTION_BEAR")bear+=2;
+  if(exhaust==="EXHAUSTION_BULL")bear+=2;if(exhaust==="EXHAUSTION_BEAR")bull+=2;
+  if(judas==="JUDAS_BULL")bull+=2;if(judas==="JUDAS_BEAR")bear+=2;
+  if(turtle==="TS_BULL")bull+=2;if(turtle==="TS_BEAR")bear+=2;
+  if(wyck.phase==="SPRING")bull+=2;if(wyck.phase==="UPTHRUST")bear+=2;
+  if(manip.score>=40){
+    if(manip.flags.some(f=>f.includes("BULL")))bull+=1;
+    if(manip.flags.some(f=>f.includes("BEAR")))bear+=1;
+  }
 
-  if(bull===bear) return base;
+  if(bull===bear)return base;
   const dir=bull>bear?"BULLISH":"BEARISH";
+  if(dir==="BULLISH"&&of.buyRatio<0.42)return base;
+  if(dir==="BEARISH"&&of.buyRatio>0.58)return base;
 
-  // Veto: order flow must agree
-  if(dir==="BULLISH" && of.buyRatio<0.42) return base;
-  if(dir==="BEARISH" && of.buyRatio>0.58) return base;
-
-  const A=atr[last], entry=c[last];
-  let stop = dir==="BULLISH" ? l[last]-A*0.5 : h[last]+A*0.5;
-  if(dir==="BULLISH"&&smc.sweepLow&&smc.sweepLevel) stop=Math.min(stop,smc.sweepLevel-A*0.25);
-  if(dir==="BEARISH"&&smc.sweepHigh&&smc.sweepLevel) stop=Math.max(stop,smc.sweepLevel+A*0.25);
+  const A=atr[last],entry=c[last];
+  let stop=dir==="BULLISH"?l[last]-A*0.5:h[last]+A*0.5;
+  if(dir==="BULLISH"&&smc.sweepLow&&smc.sweepLevel)stop=Math.min(stop,smc.sweepLevel-A*0.25);
+  if(dir==="BEARISH"&&smc.sweepHigh&&smc.sweepLevel)stop=Math.max(stop,smc.sweepLevel+A*0.25);
   const risk=Math.abs(entry-stop);
   const tp1=dir==="BULLISH"?entry+risk*1.5:entry-risk*1.5;
   const tp2=dir==="BULLISH"?entry+risk*2.5:entry-risk*2.5;
 
   base.sig={symbol,tf,dir,score:Math.round(score),aiProb,entry,stop,tp1,tp2,
-    rr:risk>0?Math.abs(tp2-entry)/risk:0,tags,
+    rr:risk>0?Math.abs(tp2-entry)/risk:0,tags,manip:manip.score,
     note:tags.filter(t=>t[1]).map(t=>t[0]).join(" · ")};
   return base;
 }
 
 /* ================================================================
-   SCANNER
+   SCANNER (restored)
    ================================================================ */
 
 async function scan(){
-  if(STATE.scanning) return; STATE.scanning=true; const t0=Date.now();
+  if(STATE.scanning)return;STATE.scanning=true;const t0=Date.now();
   try{
-    if(!STATE.universe.length) await loadUniverse();
+    if(!STATE.universe.length)await loadUniverse();
     const jobs=[];
-    for(const u of STATE.universe) for(const tf of CFG.scanTfs) jobs.push({symbol:u.symbol,tf});
+    for(const u of STATE.universe)for(const tf of CFG.scanTfs)jobs.push({symbol:u.symbol,tf});
     $("status").textContent=`scanning 0/${jobs.length}`;
     let done=0;
     const results=await Promise.all(jobs.map(async j=>{
       try{
         const kl=await getJSON(`${CFG.baseRest}/api/v3/klines?symbol=${j.symbol}&interval=${j.tf}&limit=${CFG.klinesLimit}`,45000);
-        done++; if(done%10===0) $("status").textContent=`scanning ${done}/${jobs.length}`;
+        done++;if(done%10===0)$("status").textContent=`scanning ${done}/${jobs.length}`;
         return analyze(kl,j.tf,j.symbol);
       }catch(e){return null;}
     }));
 
-    const best={},signals=[];
+    const best={},signals=[],manipList=[];
     for(const r of results){
-      if(!r) continue;
-      if(!best[r.symbol]||r.score>best[r.symbol].score) best[r.symbol]=r;
+      if(!r)continue;
+      if(!best[r.symbol]||r.score>best[r.symbol].score)best[r.symbol]=r;
       if(r.sig){const cur=signals.find(s=>s.symbol===r.symbol);if(!cur||r.sig.score>cur.score){if(cur)signals.splice(signals.indexOf(cur),1);signals.push(r.sig);}}
+      if(r.manip&&r.manip.score>=40)manipList.push({symbol:r.symbol,tf:r.tf,price:r.price,manip:r.manip});
     }
-    STATE.results=best; STATE.signals=signals.sort((a,b)=>(b.aiProb+b.score)-(a.aiProb+a.score));
-    STATE.lastScan=Date.now();
-    renderSignals(); renderResearch(); renderAI();
+    STATE.results=best;STATE.signals=signals.sort((a,b)=>(b.aiProb+b.score)-(a.aiProb+a.score));
+    STATE.manipOnly=manipList.sort((a,b)=>b.manip.score-a.manip.score);
+    renderSignals();renderResearch();renderManip();renderAI();
     const dur=((Date.now()-t0)/1000).toFixed(1);
     $("status").textContent=`${STATE.signals.length} signals · ${Object.keys(best).length} pairs · ${dur}s`;
     $("status").className="ok";
@@ -546,18 +627,20 @@ async function scan(){
 }
 
 /* ================================================================
-   RENDERERS
+   RENDERERS (restored + expanded)
    ================================================================ */
 
 function renderSignals(){
-  const st=$("signalStats"); const total=Object.keys(STATE.results).length;
-  const sigs=STATE.signals.length; const longs=STATE.signals.filter(s=>s.dir==="BULLISH").length;
+  const st=$("signalStats");const total=Object.keys(STATE.results).length;
+  const sigs=STATE.signals.length;const longs=STATE.signals.filter(s=>s.dir==="BULLISH").length;
   const shorts=STATE.signals.filter(s=>s.dir==="BEARISH").length;
   st.innerHTML=`<div class="stat"><div class="k">PAIRS</div><div class="v">${total}</div></div>
     <div class="stat"><div class="k">SIGNALS</div><div class="v" style="color:var(--green)">${sigs}</div></div>
     <div class="stat"><div class="k">LONG/SHORT</div><div class="v"><span style="color:var(--green)">${longs}</span>/<span style="color:var(--red)">${shorts}</span></div></div>`;
-  const f=STATE.sigFilter; let list=STATE.signals;
-  if(f==="BULLISH"||f==="BEARISH") list=list.filter(s=>s.dir===f);
+  const f=STATE.sigFilter;let list=STATE.signals;
+  if(f==="BULLISH"||f==="BEARISH")list=list.filter(s=>s.dir===f);
+  if(f==="high")list=list.filter(s=>s.aiProb>=70);
+  if(f==="manip")list=list.filter(s=>s.manip>=40);
   const el=$("feed");
   if(!list.length){el.innerHTML='<div class="empty">No setups above threshold.<br>Check Research for live metrics.</div>';return;}
   el.innerHTML=list.map(s=>{
@@ -574,32 +657,71 @@ function renderSignals(){
         <div class="lb"><span class="ll">TP1</span><span class="lv" style="color:var(--green)">${fmt(s.tp1)}</span></div>
         <div class="lb"><span class="ll">TP2</span><span class="lv" style="color:var(--green)">${fmt(s.tp2)}</span></div>
       </div>
-      <div class="note">SCORE ${s.score} · R:R ${s.rr.toFixed(1)} · ${s.note}</div>
+      <div class="note">SCORE ${s.score} · MANIP ${s.manip} · R:R ${s.rr.toFixed(1)} · ${s.note}</div>
     </div>`;
   }).join("");
   el.querySelectorAll(".card").forEach(c=>c.addEventListener("click",()=>openChart(c.dataset.sym)));
 }
 
 function renderResearch(){
-  const sort=$("sortSel").value, rows=Object.values(STATE.results);
+  const sort=$("sortSel").value,rows=Object.values(STATE.results);
   if(!rows.length){$("researchList").innerHTML='<div class="empty">No data.</div>';return;}
-  const key={prob:r=>r.aiProb,score:r=>r.score,cvd:r=>Math.abs(r.of.cumDelta),obi:r=>Math.abs(r.of.buyRatio-0.5)}[sort];
+  const key={prob:r=>r.aiProb,score:r=>r.score,cvd:r=>Math.abs(r.of.cumDelta),manip:r=>r.manip?r.manip.score:0}[sort];
   rows.sort((a,b)=>key(b)-key(a));
   $("researchList").innerHTML=rows.map(r=>{
     const br=r.of.buyRatio>=0.55?"on":r.of.buyRatio<=0.45?"bear":"";
     const ai=r.aiProb>=70?"on":r.aiProb>=55?"warn":"";
+    const m=r.manip?r.manip.score:0;
     return `<div class="rrow" data-sym="${r.symbol}">
       <div><div><span class="rsym">${r.symbol.replace("USDT","")}</span><span class="rtf">${r.tf}</span></div>
-      <div class="rprice">${fmt(r.price)}</div><div class="rsub">${r.regime.regime} · ADX ${r.regime.adx.toFixed(0)}</div></div>
+      <div class="rprice">${fmt(r.price)}</div><div class="rsub">${r.regime.regime} · ${r.wyck.phase}</div></div>
       <div class="rmetrics">
         <span class="pill ${ai}">AI ${r.aiProb}%</span>
         <span class="pill ${r.score>=CFG.minScore?"on":""}">S${r.score}</span>
         <span class="pill ${br}">BR ${(r.of.buyRatio*100).toFixed(0)}%</span>
-        <span class="pill ${Math.abs(r.of.deltaZ)>=1.5?"blue":""}">ΔZ ${r.of.deltaZ.toFixed(1)}</span>
-        <span class="pill">${r.regime.regime}</span>
+        <span class="pill ${m>=40?"danger":""}">M${m}</span>
       </div></div>`;
   }).join("");
-  $("researchList").querySelectorAll(".rrow").forEach(r=>r.addEventListener("click",()=>openChart(r.dataset.sym)));
+  $("researchList").querySelectorAll(".rrow").forEach(r=>r.addEventListener("click",()=>{
+    $("researchSym").value=r.dataset.sym;renderResearchDetail(r.dataset.sym);
+  }));
+}
+
+function renderResearchDetail(symbol){
+  const el=$("researchDetail");const r=STATE.results[symbol];
+  if(!r){el.innerHTML='<div class="empty">Select a pair.</div>';return;}
+  let html='<div style="background:var(--card);border-radius:12px;padding:14px;margin-top:12px">';
+  html+=`<h3 style="font-size:14px;font-weight:800;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:8px">${symbol.replace("USDT","")} — Research</h3>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+    <div class="stat"><div class="k">AI PROB</div><div class="v" style="color:var(--cyan)">${r.aiProb}%</div></div>
+    <div class="stat"><div class="k">SCORE</div><div class="v" style="color:var(--green)">${r.score}</div></div>
+    <div class="stat"><div class="k">MANIP</div><div class="v" style="color:var(--purple)">${r.manip?r.manip.score:0}</div></div>
+    <div class="stat"><div class="k">BUY RATIO</div><div class="v">${(r.of.buyRatio*100).toFixed(0)}%</div></div>
+    <div class="stat"><div class="k">CVD</div><div class="v">${fmt(r.of.cumDelta)}</div></div>
+    <div class="stat"><div class="k">WYCKOFF</div><div class="v" style="font-size:11px">${r.wyck.phase}</div></div>
+  </div>`;
+  if(r.manip&&r.manip.flags.length){
+    html+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Manipulation flags: ${r.manip.flags.join(" · ")}</div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function renderManip(){
+  const sort=$("manipSort").value;let rows=STATE.manipOnly.slice();
+  if(!rows.length){$("manipList").innerHTML='<div class="empty">No manipulation signatures.</div>';return;}
+  if(sort==="manip")rows.sort((a,b)=>b.manip.score-a.manip.score);
+  if(sort==="hunt")rows.sort((a,b)=>b.manip.flags.filter(f=>f.includes("HUNT")).length-a.manip.flags.filter(f=>f.includes("HUNT")).length);
+  if(sort==="absorp")rows.sort((a,b)=>(b.manip.flags.includes("ABSORPTION")?1:0)-(a.manip.flags.includes("ABSORPTION")?1:0));
+  if(sort==="exhaust")rows.sort((a,b)=>b.manip.flags.filter(f=>f.includes("EXHAUST")||f.includes("DIVERGENCE")).length-a.manip.flags.filter(f=>f.includes("EXHAUST")||f.includes("DIVERGENCE")).length);
+  $("manipList").innerHTML=rows.map(r=>{
+    const flags=r.manip.flags.map(f=>`<span class="pill danger">${f.replace("_"," ")}</span>`).join("");
+    return `<div class="rrow" data-sym="${r.symbol}">
+      <div><span class="rsym">${r.symbol.replace("USDT","")}</span><span class="rtf">${r.tf}</span>
+      <div class="rprice">${fmt(r.price)}</div></div>
+      <div class="rmetrics"><span class="pill danger">M${r.manip.score}</span>${flags}</div></div>`;
+  }).join("");
+  $("manipList").querySelectorAll(".rrow").forEach(r=>r.addEventListener("click",()=>openChart(r.dataset.sym)));
 }
 
 function renderAI(){
@@ -610,7 +732,7 @@ function renderAI(){
     <div class="stat"><div class="k">MODELS</div><div class="v">${rows.length}</div></div>
     <div class="stat"><div class="k">AVG ACC</div><div class="v" style="color:var(--cyan)">${avg.toFixed(0)}%</div></div>
     <div class="stat"><div class="k">BEST</div><div class="v" style="color:var(--green)">${Math.max(...rows.map(r=>r.acc))}%</div></div>
-  </div>` + rows.sort((a,b)=>b.prob-a.prob).slice(0,15).map(r=>{
+  </div>`+rows.sort((a,b)=>b.prob-a.prob).slice(0,15).map(r=>{
     return `<div class="rrow"><div><span class="rsym">${r.symbol||"model"}</span></div>
     <div class="rmetrics"><span class="pill ${r.prob>=70?"on":""}">P ${r.prob}%</span>
     <span class="pill">ACC ${r.acc}%</span><span class="pill">N ${r.trainSize}</span></div></div>`;
@@ -625,7 +747,7 @@ function fillChartSelect(){const s=$("chartSym");s.innerHTML=STATE.universe.map(
 function fillResearchSelect(){const s=$("researchSym");s.innerHTML=STATE.universe.map(u=>`<option value="${u.symbol}">${u.base}</option>`).join("");}
 
 function initChart(){
-  const c=$("chartContainer"); if(!c||STATE.chart)return;
+  const c=$("chartContainer");if(!c||STATE.chart)return;
   STATE.chart=LightweightCharts.createChart(c,{layout:{background:{color:"#12171f"},textColor:"#7a8698"},
     grid:{vertLines:{color:"#1a2130"},horzLines:{color:"#1a2130"}},rightPriceScale:{borderColor:"#1f2733"},
     timeScale:{borderColor:"#1f2733",timeVisible:true}});
@@ -652,7 +774,7 @@ function switchTab(name){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.id==="tab-"+name));
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===name));
   if(name==="chart")setTimeout(()=>{initChart();loadChart();},50);
-  if(name==="research")renderResearch(); if(name==="ai")renderAI();
+  if(name==="research")renderResearch();if(name==="manip")renderManip();if(name==="ai")renderAI();
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
@@ -660,12 +782,16 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("sigSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;STATE.sigFilter=b.dataset.f;
     Array.from($("sigSeg").children).forEach(x=>x.classList.toggle("on",x===b));renderSignals();});
   $("sortSel").addEventListener("change",renderResearch);
+  $("manipSort").addEventListener("change",renderManip);
   $("chartSym").addEventListener("change",e=>{STATE.chartSym=e.target.value;loadChart();});
   $("chartTfs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;STATE.chartTf=b.dataset.tf;
     Array.from($("chartTfs").children).forEach(x=>x.classList.toggle("on",x===b));loadChart();});
+  $("in-prob").addEventListener("input",e=>{CFG.minProb=+e.target.value;$("v-prob").textContent=CFG.minProb+"%";});
+  $("in-score").addEventListener("input",e=>{CFG.minScore=+e.target.value;$("v-score").textContent=CFG.minScore;});
+  $("in-top").addEventListener("input",e=>{CFG.topN=+e.target.value;$("v-top").textContent=CFG.topN;});
   $("btnRefresh").addEventListener("click",()=>{STATE.universe=[];STATE.results={};STATE.aiModels={};scan();});
   $("btnTest").addEventListener("click",async()=>{
-    $("debug").innerHTML=""; log("testing endpoints…","info");
+    $("debug").innerHTML="";log("testing endpoints…","info");
     try{const r=await fetch(`${CFG.baseRest}/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=3`);log(`klines: ${r.ok?"OK":"FAIL"}`,r.ok?"ok":"fail");}catch(e){log(`klines: ${e.message}`,"fail");}
   });
   (async()=>{try{await loadUniverse();initChart();await scan();}catch(e){$("status").className="err";$("status").textContent=e.message;}})();
