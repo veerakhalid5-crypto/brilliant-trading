@@ -2564,5 +2564,852 @@ async function boot(){
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
 </script>
+  
+/* ================================================================
+   ANALYSIS — swings, structure, SMC forward-pass, patterns, regime
+   Everything that feeds the AI is computed in ONE forward pass with
+   no look-ahead: a swing is only "known" L bars after it forms.
+   ================================================================ */
+function swingsOf(C, L){
+  const n=C.length, highs=[], lows=[];
+  for(let i=L;i<n-L;i++){
+    let h=true, l=true;
+    for(let j=1;j<=L;j++){
+      if(!(C[i].high>C[i-j].high) || !(C[i].high>=C[i+j].high)) h=false;
+      if(!(C[i].low<C[i-j].low) || !(C[i].low<=C[i+j].low)) l=false;
+      if(!h && !l) break;
+    }
+    if(h) highs.push({ i, price:C[i].high, time:C[i].time, conf:i+L });
+    if(l) lows.push({ i, price:C[i].low, time:C[i].time, conf:i+L });
+  }
+  return { highs, lows };
+}
+
+function smcPass(C, atr, L){
+  L = L||4;
+  const n=C.length, sw=swingsOf(C,L);
+  const confH=new Map(), confL=new Map();
+  sw.highs.forEach(s=>confH.set(s.conf,s)); sw.lows.forEach(s=>confL.set(s.conf,s));
+  const mk = v => new Array(n).fill(v);
+  const o = {
+    sw, n, trend:mk(0), brkDir:mk(0), brkAge:mk(999), brkChoch:mk(0),
+    obS:mk(0), fvgS:mk(0), pd:mk(NaN), sweepDir:mk(0), sweepAge:mk(999), sweepStrong:mk(0),
+    swH:mk(NaN), swL:mk(NaN), events:[], sweeps:[], obs:[], fvgs:[], hi:null, lo:null
+  };
+  let hi=null, lo=null, hiB=false, loB=false, trend=0;
+  let lastBrk={ i:-9999, dir:0, choch:0 }, lastSw={ i:-9999, dir:0, strong:0 };
+  const aH=[], aL=[];
+  let obs=[], fvgs=[];
+
+  for(let i=0;i<n;i++){
+    const c=C[i], a=isF(atr[i])?atr[i]:Math.max(c.high-c.low,1e-9);
+    if(confH.has(i)){ const s=confH.get(i); hi=s; hiB=false; aH.push({price:s.price,idx:s.i}); if(aH.length>10) aH.shift(); }
+    if(confL.has(i)){ const s=confL.get(i); lo=s; loB=false; aL.push({price:s.price,idx:s.i}); if(aL.length>10) aL.shift(); }
+
+    /* ----- liquidity sweeps: wick through an unswept swing, close back inside ----- */
+    for(let k=aH.length-1;k>=0;k--){
+      const h=aH[k];
+      if(i-h.idx>150){ aH.splice(k,1); continue; }
+      if(c.high>h.price){
+        if(c.close<h.price){
+          const rng=(c.high-c.low)||1e-9, uw=c.high-Math.max(c.open,c.close), strong=uw/rng>=0.4?1:0;
+          lastSw={ i, dir:-1, strong };
+          o.sweeps.push({ i, time:c.time, dir:-1, price:h.price, from:h.idx, strong });
+        }
+        aH.splice(k,1);
+      }
+    }
+    for(let k=aL.length-1;k>=0;k--){
+      const l=aL[k];
+      if(i-l.idx>150){ aL.splice(k,1); continue; }
+      if(c.low<l.price){
+        if(c.close>l.price){
+          const rng=(c.high-c.low)||1e-9, lw=Math.min(c.open,c.close)-c.low, strong=lw/rng>=0.4?1:0;
+          lastSw={ i, dir:1, strong };
+          o.sweeps.push({ i, time:c.time, dir:1, price:l.price, from:l.idx, strong });
+        }
+        aL.splice(k,1);
+      }
+    }
+
+    /* ----- break of structure / change of character ----- */
+    let brk=0;
+    if(hi && !hiB && c.close>hi.price) brk=1;
+    else if(lo && !loB && c.close<lo.price) brk=-1;
+    if(brk!==0){
+      const choch = (trend!==0 && trend!==brk) ? 1 : 0;
+      const lvl = brk===1 ? hi.price : lo.price;
+      o.events.push({ i, time:c.time, type:choch?'CHoCH':'BOS', dir:brk, level:lvl, from:(brk===1?hi.i:lo.i) });
+      if(brk===1) hiB=true; else loB=true;
+      trend=brk; lastBrk={ i, dir:brk, choch };
+      /* order block = last opposing candle at the origin of the impulse */
+      let st = brk===1 ? (lo?Math.max(lo.i,i-40):Math.max(0,i-20)) : (hi?Math.max(hi.i,i-40):Math.max(0,i-20));
+      st=Math.max(0,Math.min(st,i-1));
+      let oi=st;
+      for(let t=st;t<=i;t++){ if(brk===1 ? C[t].low<C[oi].low : C[t].high>C[oi].high) oi=t; }
+      let j=oi;
+      for(let t=oi;t>=Math.max(0,oi-2);t--){ if(brk===1 ? C[t].close<C[t].open : C[t].close>C[t].open){ j=t; break; } }
+      const top=C[j].high, bot=C[j].low, hgt=top-bot;
+      if(hgt>=0.15*a && hgt<=3.5*a && !obs.some(z=>z.dir===brk && Math.abs(z.bot-bot)<0.2*a)){
+        obs.push({ dir:brk, top, bot, i:j, created:i, touches:0, strong:Math.abs(c.close-c.open)>=a?1:0, choch });
+        const same=obs.filter(z=>z.dir===brk);
+        if(same.length>5){ const kill=same[0]; obs=obs.filter(z=>z!==kill); }
+      }
+    }
+
+    /* ----- mitigate order blocks / FVGs, then add new FVG ----- */
+    obs=obs.filter(z=>{
+      if(i-z.created>400) return false;
+      if(i>z.created){
+        if(z.dir===1){ if(c.close<z.bot) return false; if(c.low<=z.top && c.close>=z.bot) z.touches++; }
+        else { if(c.close>z.top) return false; if(c.high>=z.bot && c.close<=z.top) z.touches++; }
+      }
+      return true;
+    });
+    fvgs=fvgs.filter(z=>{
+      if(i-z.created>300) return false;
+      if(i>z.created){
+        if(z.dir===1){ if(c.close<z.bot) return false; if(c.low<z.top) z.fill=Math.max(z.fill,(z.top-Math.max(c.low,z.bot))/(z.top-z.bot)); }
+        else { if(c.close>z.top) return false; if(c.high>z.bot) z.fill=Math.max(z.fill,(Math.min(c.high,z.top)-z.bot)/(z.top-z.bot)); }
+      }
+      return true;
+    });
+    if(i>=2){
+      if(C[i-2].high<c.low && c.low-C[i-2].high>=0.15*a) fvgs.push({ dir:1, top:c.low, bot:C[i-2].high, i:i-1, created:i, fill:0 });
+      else if(C[i-2].low>c.high && C[i-2].low-c.high>=0.15*a) fvgs.push({ dir:-1, top:C[i-2].low, bot:c.high, i:i-1, created:i, fill:0 });
+      if(fvgs.length>12) fvgs.shift();
+    }
+
+    /* ----- per-bar scores (known at the close of bar i) ----- */
+    let os=0, fs=0;
+    for(const z of obs){
+      if(z.created===i) continue;
+      const inside=c.close>=z.bot && c.close<=z.top;
+      const dist=c.close>z.top?c.close-z.top:(c.close<z.bot?z.bot-c.close:0);
+      let s=0;
+      if(inside) s=0.9; else if(dist<=0.6*a) s=0.15+0.5*(1-dist/(0.6*a));
+      if(s){ if(z.touches>=3) s*=0.5; os+=z.dir*s; }
+    }
+    for(const z of fvgs){
+      if(z.created===i) continue;
+      const inside=c.close>=z.bot && c.close<=z.top;
+      const dist=c.close>z.top?c.close-z.top:(c.close<z.bot?z.bot-c.close:0);
+      let s=0;
+      if(inside) s=0.8; else if(dist<=0.5*a) s=0.1+0.4*(1-dist/(0.5*a));
+      if(s) fs+=z.dir*s*(1-0.5*z.fill);
+    }
+    o.obS[i]=clamp(os,-1,1); o.fvgS[i]=clamp(fs,-1,1);
+    o.trend[i]=trend; o.brkDir[i]=lastBrk.dir; o.brkAge[i]=i-lastBrk.i; o.brkChoch[i]=lastBrk.choch;
+    o.sweepDir[i]=lastSw.dir; o.sweepAge[i]=i-lastSw.i; o.sweepStrong[i]=lastSw.strong;
+    o.swH[i]=hi?hi.price:NaN; o.swL[i]=lo?lo.price:NaN;
+    if(hi && lo && hi.price>lo.price) o.pd[i]=clamp((c.close-lo.price)/(hi.price-lo.price),-0.5,1.5);
+  }
+  o.obs=obs; o.fvgs=fvgs; o.hi=hi; o.lo=lo; o.lastBrk=lastBrk; o.lastSw=lastSw;
+  return o;
+}
+
+/* ================================================================
+   CONTEXT — every array the AI, the chart overlay and panels need
+   ================================================================ */
+function buildCtx(C){
+  const n=C.length, x={ n, C };
+  x.close=C.map(c=>c.close); x.open=C.map(c=>c.open); x.high=C.map(c=>c.high); x.low=C.map(c=>c.low); x.vol=C.map(c=>c.volume);
+  x.atr=atrA(C,14); x.atrPct=x.atr.map((a,i)=>a/x.close[i]);
+  x.e20=ema(x.close,20); x.e50=ema(x.close,50); x.e100=ema(x.close,100); x.e200=ema(x.close,200);
+  x.rsi=rsiA(x.close,14); x.macd=macdA(x.close);
+  const d=dmiA(C,14); x.adx=d.adx; x.pdi=d.pdi; x.mdi=d.mdi;
+  x.bb=bbA(x.close,20,2); x.er=erA(x.close,10);
+  const st=supertrendA(C,10,3); x.stDir=st.dir; x.stLine=st.line;
+  x.sq=x.bb.up.map((u,i)=> isF(u)&&isF(x.e20[i])&&isF(x.atr[i]) ? (u<x.e20[i]+1.5*x.atr[i] && x.bb.lo[i]>x.e20[i]-1.5*x.atr[i]) : false);
+  x.hasTb = C.some(c=>c.tb>0);
+  x.delta = C.map(c=>{
+    if(x.hasTb) return 2*c.tb-c.volume;
+    const r=(c.high-c.low)||1e-9; return c.volume*(2*(c.close-c.low)/r-1);
+  });
+  x.dr = C.map((c,i)=>c.volume?x.delta[i]/c.volume:0);
+  x.cvd=new Array(n).fill(0); let cv=0; for(let i=0;i<n;i++){ cv+=x.delta[i]; x.cvd[i]=cv; }
+  const roll=(arr,p)=>{ const o=new Array(n).fill(NaN); let s=0; for(let i=0;i<n;i++){ s+=arr[i]; if(i>=p) s-=arr[i-p]; if(i>=p-1) o[i]=s; } return o; };
+  const sd5=roll(x.delta,5), sv5=roll(x.vol,5), sd20=roll(x.delta,20), sv20=roll(x.vol,20), sv10=roll(x.vol,10);
+  x.dr5=sd5.map((v,i)=>sv5[i]?v/sv5[i]:0); x.dr20=sd20.map((v,i)=>sv20[i]?v/sv20[i]:0);
+  x.cvdS=x.cvd.map((v,i)=> i>=10 && sv10[i] ? (v-x.cvd[i-10])/sv10[i] : 0);
+  const lv=x.vol.map(v=>Math.log(v+1)), lm=sma(lv,50), ls=stdevA(lv,50);
+  x.volz=lv.map((v,i)=> isF(lm[i])&&ls[i]>0 ? (v-lm[i])/ls[i] : 0);
+  x.bbwRank=pctRank(x.bb.w,100); x.atrRank=pctRank(x.atrPct,100);
+  x.smc=smcPass(C,x.atr,4);
+  return x;
+}
+
+function regimeAt(x,i){
+  const adx=x.adx[i], er=x.er[i], bbr=x.bbwRank[i], ar=x.atrRank[i];
+  const tr = clamp(((isF(adx)?adx:15)-15)/20,0,1)*0.6 + clamp(((isF(er)?er:0.2)-0.15)/0.35,0,1)*0.4;
+  const up = x.e20[i]>x.e50[i] && x.e50[i]>x.e100[i], dn = x.e20[i]<x.e50[i] && x.e50[i]<x.e100[i];
+  let name='Range', dir=0;
+  if(isF(bbr) && bbr<0.15) name='Squeeze';
+  else if(tr>=0.5 && up){ name='Trend ↑'; dir=1; }
+  else if(tr>=0.5 && dn){ name='Trend ↓'; dir=-1; }
+  else if(isF(ar) && ar>0.85) name='Volatile';
+  return { name, dir, trend:tr, vol:(isF(ar)&&ar>0.8)?'high':(isF(ar)&&ar<0.25)?'low':'normal', bbr, atrR:ar, adx, er };
+}
+
+/* ---------- behaviour model (what the market is "doing") ---------- */
+const BEHAV = ['Accumulation (squeeze)','Expansion breakout','Liquidity hunt ↑ (lows swept)','Liquidity hunt ↓ (highs swept)','Trend up','Trend down','Exhaustion / reversal risk','Range / chop'];
+function behaviorAt(x,i){
+  const sm=x.smc, rg=regimeAt(x,i);
+  if(sm.sweepAge[i]<=3) return sm.sweepDir[i]>0?2:3;
+  if(rg.dir===1 && x.rsi[i]>70 && x.dr5[i]<0) return 6;
+  if(rg.dir===-1 && x.rsi[i]<30 && x.dr5[i]>0) return 6;
+  if(rg.name==='Squeeze') return 0;
+  if(i>=21){
+    const hh=rollMax(x.high,i-1,20), ll=rollMin(x.low,i-1,20);
+    if((x.close[i]>hh || x.close[i]<ll) && x.volz[i]>0.8) return 1;
+  }
+  if(rg.dir===1) return 4;
+  if(rg.dir===-1) return 5;
+  return 7;
+}
+
+/* ================================================================
+   PATTERNS, TRENDLINES, SUPPORT/RESISTANCE
+   ================================================================ */
+function findW(C,sw,atr){
+  const lows=sw.lows; if(lows.length<2) return null;
+  const n=C.length, price=C[n-1].close;
+  for(let k=lows.length-1;k>=1;k--){
+    const l2=lows[k], l1=lows[k-1], lo=Math.min(l1.price,l2.price);
+    if(Math.abs(l2.price-l1.price)/l1.price>0.02) continue;
+    if(l2.i-l1.i<5) continue;
+    let peak=-Infinity, ok=true;
+    for(let j=l1.i+1;j<l2.i;j++){ if(C[j].high>peak) peak=C[j].high; if(C[j].low<lo*0.999){ ok=false; break; } }
+    if(!ok || (peak-l1.price)/l1.price<0.02) continue;
+    const age=n-1-l2.i; if(age>120) continue;
+    let inval=false; for(let j=l2.i+1;j<n;j++) if(C[j].close<lo*0.998){ inval=true; break; }
+    if(inval) continue;
+    const breakout=price>peak, forming=price>lo && price<=peak;
+    if(!breakout && !forming) continue;
+    return { pattern:'W', dir:'up', low1:l1.price, low2:l2.price, neckline:peak, breakout, forming, currentPrice:price,
+      formedAt:C[l2.i].time, age, strength:((price-l1.price)/l1.price*100).toFixed(2), target:peak+(peak-lo), stop:lo };
+  }
+  return null;
+}
+function findM(C,sw,atr){
+  const highs=sw.highs; if(highs.length<2) return null;
+  const n=C.length, price=C[n-1].close;
+  for(let k=highs.length-1;k>=1;k--){
+    const h2=highs[k], h1=highs[k-1], hi=Math.max(h1.price,h2.price);
+    if(Math.abs(h2.price-h1.price)/h1.price>0.02) continue;
+    if(h2.i-h1.i<5) continue;
+    let valley=Infinity, ok=true;
+    for(let j=h1.i+1;j<h2.i;j++){ if(C[j].low<valley) valley=C[j].low; if(C[j].high>hi*1.001){ ok=false; break; } }
+    if(!ok || (h1.price-valley)/h1.price<0.02) continue;
+    const age=n-1-h2.i; if(age>120) continue;
+    let inval=false; for(let j=h2.i+1;j<n;j++) if(C[j].close>hi*1.002){ inval=true; break; }
+    if(inval) continue;
+    const breakout=price<valley, forming=price<hi && price>=valley;
+    if(!breakout && !forming) continue;
+    return { pattern:'M', dir:'down', high1:h1.price, high2:h2.price, neckline:valley, breakout, forming, currentPrice:price,
+      formedAt:C[h2.i].time, age, strength:((h1.price-price)/h1.price*100).toFixed(2), target:valley-(hi-valley), stop:hi };
+  }
+  return null;
+}
+
+/* trendline through two swing points, valid only while no earlier close violated it */
+function trendlinesOf(C,sw,atr){
+  const n=C.length, res=[], price=C[n-1].close, a=isF(atr[n-1])?atr[n-1]:price*0.005;
+  function build(list,kind){
+    for(let b=list.length-1;b>=1 && b>=list.length-4;b--){
+      for(let q=b-1;q>=0 && q>=b-5;q--){
+        const p1=list[q], p2=list[b];
+        if(p2.i-p1.i<8) continue;
+        if(kind===1 && !(p2.price>p1.price)) continue;
+        if(kind===-1 && !(p2.price<p1.price)) continue;
+        const slope=(p2.price-p1.price)/(p2.i-p1.i);
+        let bad=false, breakAt=-1;
+        for(let j=p1.i;j<n;j++){
+          const lp=p1.price+slope*(j-p1.i);
+          const viol = kind===1 ? C[j].close<lp-0.15*a : C[j].close>lp+0.15*a;
+          if(viol){ if(j>p2.i){ if(breakAt<0) breakAt=j; } else { bad=true; break; } }
+        }
+        if(bad) continue;
+        const proj=p1.price+slope*(n-1-p1.i);
+        const broken=breakAt>=0, breakAge=broken?n-1-breakAt:-1;
+        if(broken && breakAge>40) continue;
+        let retest=null;
+        if(broken){
+          for(let j=breakAt+2;j<n;j++){
+            const lp=p1.price+slope*(j-p1.i);
+            const touched = kind===1 ? (C[j].high>=lp-0.35*a && C[j].close<lp+0.2*a) : (C[j].low<=lp+0.35*a && C[j].close>lp-0.2*a);
+            if(touched){ retest={ i:j, age:n-1-j, price:lp }; break; }
+          }
+        }
+        const role = !broken ? (kind===1?'support':'resistance')
+          : kind===1 ? (price<proj?'broken support → now resistance':'reclaimed')
+          : (price>proj?'broken resistance → now support':'rejected');
+        res.push({ kind:kind===1?'support':'resistance', p1, p2, slope, proj, broken, breakAge, retest, role, near:Math.abs(price-proj)<0.5*a, dir:kind });
+        return;
+      }
+    }
+  }
+  build(sw.lows,1); build(sw.highs,-1);
+  return res;
+}
+
+function findSR(C,sw,atr){
+  const n=C.length; if(n<50) return [];
+  const all=[...sw.highs.map(h=>({price:h.price,i:h.i})), ...sw.lows.map(l=>({price:l.price,i:l.i}))];
+  const cl=[];
+  all.forEach(l=>{
+    let f=false;
+    for(const c of cl){
+      if(Math.abs(c.price-l.price)/c.price<0.003){ c.price=(c.price*c.touches+l.price)/(c.touches+1); c.touches++; c.lastIdx=Math.max(c.lastIdx,l.i); f=true; break; }
+    }
+    if(!f) cl.push({ price:l.price, touches:1, lastIdx:l.i });
+  });
+  cl.forEach(c=>{ c.score=c.touches*Math.exp(-(n-1-c.lastIdx)/80)*100; });
+  return cl.sort((a,b)=>b.score-a.score).slice(0,8);
+}
+
+/* ================================================================
+   LIQUIDITY POOLS (equal highs/lows, previous day/week extremes)
+   ================================================================ */
+function equalLevels(list,tol){
+  const groups=[], used=new Set();
+  for(let i=0;i<list.length;i++){
+    if(used.has(i)) continue;
+    const a=list[i], g={ price:a.price, touches:1, lastTime:a.time, lastI:a.i };
+    for(let j=i+1;j<list.length;j++){
+      if(used.has(j)) continue;
+      if(Math.abs(list[j].price-a.price)/a.price<tol){
+        g.price=(g.price*g.touches+list[j].price)/(g.touches+1); g.touches++; g.lastTime=list[j].time; g.lastI=list[j].i; used.add(j);
+      }
+    }
+    used.add(i);
+    if(g.touches>=2) groups.push(g);
+  }
+  return groups;
+}
+function scoreLiq(g,k){
+  let s = g.touches>=5?50 : g.touches>=3?30 : g.touches>=2?20 : 10;
+  const barsAgo=k.length-1-g.lastI;
+  s += barsAgo<30?20 : barsAgo<100?10 : 0;
+  const cur=k[k.length-1].close, dist=Math.abs(g.price-cur)/cur*100;
+  s += dist<5?10 : dist<15?5 : 0;
+  return Math.min(100,s);
+}
+async function buildLiquidityZones(sym){
+  const zones=[];
+  const tfs=['4h','1d','1w'];
+  const data=await Promise.all(tfs.map(tf=>fetchKlines(sym,tf,tf==='1w'?120:220,45000)));
+  tfs.forEach((tf,ti)=>{
+    const k=data[ti].slice(0,-1); if(k.length<30) return;
+    const sw=swingsOf(k,5), cur=k[k.length-1].close;
+    const swept=(g,isHigh)=>{ for(let j=g.lastI+1;j<k.length;j++){ if(isHigh? k[j].high>g.price*1.0004 : k[j].low<g.price*0.9996) return true; } return false; };
+    equalLevels(sw.highs,0.002).forEach(g=>{
+      if(swept(g,true)) return;
+      const sc=scoreLiq(g,k); zones.push({ tf, type:'BSL', label:'Equal highs', price:g.price, touches:g.touches, score:sc, dist:(g.price-cur)/cur*100 });
+    });
+    equalLevels(sw.lows,0.002).forEach(g=>{
+      if(swept(g,false)) return;
+      const sc=scoreLiq(g,k); zones.push({ tf, type:'SSL', label:'Equal lows', price:g.price, touches:g.touches, score:sc, dist:(g.price-cur)/cur*100 });
+    });
+    if(tf==='1d' && k.length>=2){
+      const p=k[k.length-1];
+      zones.push({ tf, type:'BSL', label:'Prev day high', price:p.high, touches:1, score:80, dist:(p.high-cur)/cur*100 });
+      zones.push({ tf, type:'SSL', label:'Prev day low', price:p.low, touches:1, score:80, dist:(p.low-cur)/cur*100 });
+    }
+    if(tf==='1w' && k.length>=2){
+      const p=k[k.length-1];
+      zones.push({ tf, type:'BSL', label:'Prev week high', price:p.high, touches:1, score:85, dist:(p.high-cur)/cur*100 });
+      zones.push({ tf, type:'SSL', label:'Prev week low', price:p.low, touches:1, score:85, dist:(p.low-cur)/cur*100 });
+    }
+  });
+  zones.sort((a,b)=>b.score-a.score);
+  const seen=[];
+  return zones.filter(z=>{ if(seen.some(s=>s.type===z.type && Math.abs(s.price-z.price)/z.price<0.003)) return false; seen.push(z); return true; }).slice(0,18);
+}
+
+/* ================================================================
+   WYCKOFF / CRT / AMD / SESSIONS
+   ================================================================ */
+function wyckoffPhase(x,i){
+  if(i<60) return { phase:'—', avgVol:1, recentVol:1 };
+  const cl=x.close.slice(i-59,i+1), vols=x.vol.slice(i-59,i+1);
+  const avgVol=vols.reduce((a,b)=>a+b,0)/60, recentVol=vols.slice(-5).reduce((a,b)=>a+b,0)/5;
+  const last20=Math.max(...cl.slice(-20))-Math.min(...cl.slice(-20));
+  const prior40=Math.max(...cl.slice(0,40))-Math.min(...cl.slice(0,40));
+  const contr=last20<prior40*0.6, exp=last20>prior40*1.4;
+  const trend=x.e20[i]-x.e50[i];
+  let phase;
+  if(contr && recentVol<avgVol) phase='Accumulation / Distribution range';
+  else if(exp && trend>0) phase='Markup (trend up)';
+  else if(exp && trend<0) phase='Markdown (trend down)';
+  else phase=trend>0?'Bullish continuation':'Bearish continuation';
+  return { phase, avgVol, recentVol };
+}
+function crtOf(C){
+  const n=C.length; if(n<5) return { state:'—', note:'', setup:null };
+  const r=C.slice(-40).map(c=>c.high-c.low);
+  const recent=r.slice(-10).reduce((a,b)=>a+b,0)/10, prior=r.slice(-30,-10).reduce((a,b)=>a+b,0)/Math.max(1,r.slice(-30,-10).length);
+  const state = recent<prior*0.65?'Contraction':recent>prior*1.5?'Expansion':'Normal';
+  let setup=null;
+  for(let o=0;o<=1 && !setup;o++){
+    const c2=C[n-1-o], c1=C[n-2-o];
+    if(c2.high>c1.high && c2.close<c1.high && c2.close>c1.low) setup={ dir:-1, rangeHigh:c1.high, rangeLow:c1.low, target:c1.low, age:o, note:'Swept range high, closed back inside → target range low' };
+    else if(c2.low<c1.low && c2.close>c1.low && c2.close<c1.high) setup={ dir:1, rangeHigh:c1.high, rangeLow:c1.low, target:c1.high, age:o, note:'Swept range low, closed back inside → target range high' };
+  }
+  return { state, note:state==='Contraction'?'Range compressing':state==='Expansion'?'Range expanding':'Range within normal bounds', setup };
+}
+function detectAMD(k){
+  if(!k||k.length<45) return null;
+  const recent=k.slice(-12), prior=k.slice(-40,-12);
+  const rN=Math.max(...recent.map(c=>c.high))-Math.min(...recent.map(c=>c.low));
+  const rP=Math.max(...prior.map(c=>c.high))-Math.min(...prior.map(c=>c.low));
+  const rangeRatio=rP?rN/rP:1;
+  const vN=recent.reduce((a,c)=>a+c.volume,0)/recent.length, vP=prior.reduce((a,c)=>a+c.volume,0)/prior.length;
+  const volRatio=vP?vN/vP:1;
+  const pH=Math.max(...prior.map(c=>c.high)), pL=Math.min(...prior.map(c=>c.low)), lc=k[k.length-1].close;
+  let sweptHigh=false, sweptLow=false;
+  recent.forEach(c=>{ if(c.high>pH && c.close<pH) sweptHigh=true; if(c.low<pL && c.close>pL) sweptLow=true; });
+  let acc=0, man=0, dis=0;
+  if(rangeRatio<0.7) acc+=40; else if(rangeRatio<0.9) acc+=20;
+  if(volRatio<0.8) acc+=30; else if(volRatio<1.0) acc+=15;
+  if(lc>pL && lc<pH) acc+=20;
+  if(sweptHigh||sweptLow) man+=50;
+  if(volRatio>1.4) man+=25;
+  if(rangeRatio>1.1) man+=15;
+  if(rangeRatio>1.3) dis+=35;
+  if(volRatio>1.2) dis+=20;
+  if(Math.abs(lc-pH)/pH<0.02 || Math.abs(lc-pL)/pL<0.02) dis+=15;
+  const total=acc+man+dis||1;
+  const mix={ acc:Math.round(acc/total*100), man:Math.round(man/total*100), dis:Math.round(dis/total*100) };
+  const phase = (mix.acc>=mix.man && mix.acc>=mix.dis) ? 'Accumulation' : (mix.man>=mix.dis ? 'Manipulation' : 'Distribution');
+  const basis=['Range '+rangeRatio.toFixed(2)+'× prior 30-bar range','Volume '+volRatio.toFixed(2)+'× prior 30-bar average'];
+  if(sweptHigh) basis.push('Recent sweep of prior 4H swing high');
+  if(sweptLow) basis.push('Recent sweep of prior 4H swing low');
+  return { phase, mix, basis };
+}
+const SESSIONS=[{name:'Asian',start:0,end:8},{name:'London',start:7,end:16},{name:'NY AM',start:13,end:17},{name:'NY PM',start:17,end:21}];
+function currentSession(){
+  const h=new Date().getUTCHours();
+  for(const s of SESSIONS) if(h>=s.start && h<s.end) return s;
+  return null;
+}
+
+/* ================================================================
+   QCITY AI ENGINE
+   --------------------------------------------------------------
+   1. Feature extractor  — 25 no-look-ahead features per bar
+   2. Rule engine        — regime-aware weighted scoring (Platt-calibrated)
+   3. Learned model      — L2 logistic regression trained in-browser on this
+                           coin + timeframe, label = ±1 ATR first-touch
+   4. Ensemble           — weights chosen on a validation block by skill
+   5. Validation         — chronological train / validation / test with purge
+   6. Backtest gate      — the test block is traded with costs; a signal is only
+                           actionable when the procedure shows a positive edge
+   7. Live context       — derivatives, order book, higher-timeframe bias
+   8. Ledger             — live signals are stored and graded later
+   ================================================================ */
+const NF = 25;
+const FNAME = ['EMA20/50 trend','EMA50/100 trend','Price vs EMA200','EMA20 slope','RSI','MACD histogram','DI balance × ADX','Supertrend',
+  'Bollinger %B','Delta 5-bar','Delta 20-bar','CVD slope','Volume impulse','Market structure','Recent BOS/CHoCH','Liquidity sweep',
+  'Order block','Fair value gap','Premium/Discount','10-bar momentum','Candle body','Close in range','Efficiency × dir','RSI reversion (range)','Trend × strength'];
+const HORIZON = {'1m':20,'3m':16,'5m':16,'15m':14,'30m':12,'1h':12,'2h':10,'4h':10,'8h':8,'1d':8,'1w':6};
+const HTF_LADDER = {'1m':['5m','15m'],'3m':['15m','1h'],'5m':['15m','1h'],'15m':['1h','4h'],'30m':['2h','4h'],'1h':['4h','1d'],'2h':['8h','1d'],'4h':['1d','1w'],'8h':['1d','1w'],'1d':['1w'],'1w':[]};
+const WARMUP = 120;
+
+function featuresAt(x,i){
+  const a=x.atr[i]; if(!isF(a)||a<=0||i<WARMUP) return null;
+  const e20=x.e20[i], e50=x.e50[i], e100=x.e100[i], e200=x.e200[i], c=x.close[i];
+  if(!isF(e20)||!isF(e50)||!isF(e100)) return null;
+  const th=Math.tanh, f=new Array(NF).fill(0);
+  f[0]=th((e20-e50)/a/2);
+  f[1]=th((e50-e100)/a/3);
+  f[2]=isF(e200)?th((c-e200)/a/6):0;
+  f[3]=th((e20-x.e20[i-5])/a/1.5);
+  f[4]=isF(x.rsi[i])?clamp((x.rsi[i]-50)/25,-2,2):0;
+  f[5]=isF(x.macd.hist[i])?th(x.macd.hist[i]/a*4):0;
+  const adx=isF(x.adx[i])?x.adx[i]:15, sm=(x.pdi[i]||0)+(x.mdi[i]||0);
+  f[6]=sm>0?((x.pdi[i]-x.mdi[i])/sm)*clamp(adx/30,0,1.2):0;
+  f[7]=x.stDir[i]||0;
+  f[8]=isF(x.bb.pctB[i])?clamp((x.bb.pctB[i]-0.5)*2,-1.5,1.5):0;
+  f[9]=isF(x.dr5[i])?clamp(x.dr5[i]*2,-1,1):0;
+  f[10]=isF(x.dr20[i])?clamp(x.dr20[i]*3,-1,1):0;
+  f[11]=clamp(x.cvdS[i]*2,-1,1);
+  f[12]=th(x.volz[i]/2)*sign(c-x.open[i]);
+  f[13]=x.smc.trend[i];
+  f[14]=x.smc.brkDir[i]*Math.exp(-x.smc.brkAge[i]/10)*(x.smc.brkChoch[i]?1.3:1);
+  f[15]=clamp(x.smc.sweepDir[i]*Math.exp(-x.smc.sweepAge[i]/6)*(1+0.5*x.smc.sweepStrong[i]),-1.5,1.5);
+  f[16]=x.smc.obS[i]; f[17]=x.smc.fvgS[i];
+  f[18]=isF(x.smc.pd[i])?-clamp((x.smc.pd[i]-0.5)*2,-1,1):0;
+  f[19]=th((c-x.close[i-10])/a/4);
+  f[20]=th((c-x.open[i])/a);
+  f[21]=((c-x.low[i])/((x.high[i]-x.low[i])||1e-9))*2-1;
+  f[22]=(isF(x.er[i])?x.er[i]:0)*sign(c-x.close[i-10]);
+  const rg=regimeAt(x,i);
+  f[23]=f[4]*(1-rg.trend);
+  f[24]=f[0]*rg.trend;
+  for(let k=0;k<NF;k++) if(!isF(f[k])) f[k]=0;
+  return f;
+}
+
+/* ---------- rule engine: regime-aware weights ---------- */
+const RW = {
+  'Trend':   { trend:.30, mom:.15, mrev:.05, flow:.15, struct:.20, liq:.15, k:1 },
+  'Range':   { trend:.05, mom:.05, mrev:.30, flow:.15, struct:.10, liq:.35, k:1 },
+  'Squeeze': { trend:.15, mom:.10, mrev:0,   flow:.30, struct:.25, liq:.20, k:.8 },
+  'Volatile':{ trend:.20, mom:.20, mrev:0,   flow:.20, struct:.20, liq:.20, k:.75 }
+};
+function ruleScore(f, rg){
+  const comps = {
+    trend: 0.30*f[0]+0.15*f[1]+0.15*f[2]+0.10*f[3]+0.15*f[7]+0.15*f[6],
+    mom:   0.35*f[19]+0.25*f[5]+0.20*clamp(f[4],-1,1)+0.20*f[22],
+    mrev: -0.5*clamp(f[4],-1.2,1.2)-0.5*clamp(f[8],-1,1),
+    flow:  0.35*f[9]+0.25*f[10]+0.25*f[11]+0.15*f[12],
+    struct:0.5*f[13]+0.5*clamp(f[14],-1,1),
+    liq:   0.4*clamp(f[15],-1,1)+0.25*f[16]+0.2*f[17]+0.15*f[18]
+  };
+  const key = rg.name.startsWith('Trend')?'Trend':rg.name;
+  const w = RW[key]||RW.Range;
+  let s=0; for(const k in comps) s+=comps[k]*(w[k]||0);
+  return { score:clamp(s*w.k,-1,1), comps, w, key };
+}
+
+/* ---------- logistic regression ---------- */
+const sigm = z => 1/(1+Math.exp(-clamp(z,-30,30)));
+function trainLogit(X,Y,opt){
+  opt=opt||{};
+  const m=X.length, d=X[0].length, lam=opt.l2==null?0.04:opt.l2, epochs=opt.epochs||260, lr=opt.lr||0.06;
+  const mu=new Array(d).fill(0), sd=new Array(d).fill(0);
+  for(let j=0;j<d;j++){ let s=0; for(let r=0;r<m;r++) s+=X[r][j]; mu[j]=s/m; }
+  for(let j=0;j<d;j++){ let s=0; for(let r=0;r<m;r++){ const t=X[r][j]-mu[j]; s+=t*t; } sd[j]=Math.sqrt(s/m)||1; if(sd[j]<1e-9) sd[j]=1; }
+  const Z=X.map(row=>row.map((v,j)=>(v-mu[j])/sd[j]));
+  let base=0; for(let r=0;r<m;r++) base+=Y[r]; base/=m; base=clamp(base,0.05,0.95);
+  const w=new Array(d).fill(0); let b=Math.log(base/(1-base));
+  const mw=new Array(d).fill(0), vw=new Array(d).fill(0); let mb=0, vb=0;
+  const b1=0.9, b2=0.999;
+  for(let ep=1;ep<=epochs;ep++){
+    const g=new Array(d).fill(0); let gb=0;
+    for(let r=0;r<m;r++){
+      let z=b; const zr=Z[r]; for(let j=0;j<d;j++) z+=w[j]*zr[j];
+      const e=sigm(z)-Y[r];
+      gb+=e; for(let j=0;j<d;j++) g[j]+=e*zr[j];
+    }
+    gb/=m;
+    for(let j=0;j<d;j++){ g[j]=g[j]/m+lam*w[j]; }
+    const c1=1-Math.pow(b1,ep), c2=1-Math.pow(b2,ep);
+    for(let j=0;j<d;j++){
+      mw[j]=b1*mw[j]+(1-b1)*g[j]; vw[j]=b2*vw[j]+(1-b2)*g[j]*g[j];
+      w[j]-=lr*(mw[j]/c1)/(Math.sqrt(vw[j]/c2)+1e-8);
+    }
+    mb=b1*mb+(1-b1)*gb; vb=b2*vb+(1-b2)*gb*gb;
+    b-=lr*(mb/c1)/(Math.sqrt(vb/c2)+1e-8);
+  }
+  return { w, b, mu, sd, base };
+}
+function predictLogit(M,f){
+  let z=M.b; for(let j=0;j<M.w.length;j++) z+=M.w[j]*((f[j]-M.mu[j])/M.sd[j]);
+  return sigm(z);
+}
+function contribs(M,f){
+  return M.w.map((w,j)=>({ j, c:w*((f[j]-M.mu[j])/M.sd[j]), w }));
+}
+function aucOf(scores,labels){
+  const n=scores.length; if(n<10) return NaN;
+  const idx=scores.map((s,i)=>i).sort((a,b)=>scores[a]-scores[b]);
+  let rank=1, sumPos=0, nPos=0, nNeg=0;
+  for(let k=0;k<n;){
+    let e=k; while(e+1<n && scores[idx[e+1]]===scores[idx[k]]) e++;
+    const avg=(rank+rank+(e-k))/2;
+    for(let t=k;t<=e;t++){ if(labels[idx[t]]===1){ sumPos+=avg; nPos++; } else nNeg++; }
+    rank+=e-k+1; k=e+1;
+  }
+  if(!nPos||!nNeg) return NaN;
+  return (sumPos-nPos*(nPos+1)/2)/(nPos*nNeg);
+}
+
+/* ---------- labelled dataset (triple-barrier style, no look-ahead in features) ---------- */
+function buildDataset(x,H){
+  const X=[], Y=[], idx=[], rule=[];
+  for(let i=WARMUP;i<x.n-H;i++){
+    const f=featuresAt(x,i); if(!f) continue;
+    const a=x.atr[i], c=x.close[i], up=c+a, dn=c-a;
+    let lab=-1, done=false;
+    for(let j=i+1;j<=i+H;j++){
+      const hu=x.high[j]>=up, hd=x.low[j]<=dn;
+      if(hu&&hd){ done=true; break; }
+      if(hu){ lab=1; done=true; break; }
+      if(hd){ lab=0; done=true; break; }
+    }
+    if(done && lab<0) continue;
+    if(!done){ const r=(x.close[i+H]-c)/a; if(Math.abs(r)<0.3) continue; lab=r>0?1:0; }
+    X.push(f); Y.push(lab); idx.push(i);
+    rule.push(ruleScore(f,regimeAt(x,i)).score);
+  }
+  return { X,Y,idx,rule,H };
+}
+
+/* ---------- walk-forward backtest of the ensemble probabilities ---------- */
+function runBacktest(x, probs, from, to, o){
+  const thr=o.thr, stopATR=o.stopATR||1.5, rr=o.rr||1.5, maxHold=o.maxHold, cost=(o.costPct||0)/100;
+  const trades=[]; let i=from;
+  while(i<to){
+    const p=probs.get(i);
+    if(p==null){ i++; continue; }
+    const dir=p>0.5+thr?1:p<0.5-thr?-1:0;
+    if(!dir){ i++; continue; }
+    const e=i+1; if(e>=x.n) break;
+    const entry=x.open[e], a=x.atr[i], risk=stopATR*a;
+    if(!(risk>0)) { i++; continue; }
+    const stop=entry-dir*risk, tp=entry+dir*risk*rr;
+    let r=null, exit=Math.min(x.n-1,e+maxHold);
+    for(let j=e;j<=Math.min(x.n-1,e+maxHold);j++){
+      const hs=dir===1?x.low[j]<=stop:x.high[j]>=stop, ht=dir===1?x.high[j]>=tp:x.low[j]<=tp;
+      if(hs){ r=-1; exit=j; break; }
+      if(ht){ r=rr; exit=j; break; }
+    }
+    if(r===null) r=dir*(x.close[exit]-entry)/risk;
+    r-=(cost*entry)/risk;
+    trades.push({ i, dir, r, exit });
+    i=exit+1;
+  }
+  return trades;
+}
+function tradeStats(tr){
+  const n=tr.length;
+  if(!n) return { n:0, win:0, exp:0, pf:0, dd:0, total:0, t:0 };
+  let w=0, gp=0, gl=0, tot=0, peak=0, dd=0;
+  tr.forEach(t=>{ if(t.r>0){ w++; gp+=t.r; } else gl-=t.r; tot+=t.r; if(tot>peak) peak=tot; if(peak-tot>dd) dd=peak-tot; });
+  const mean=tot/n; let v=0; tr.forEach(t=>{ v+=(t.r-mean)*(t.r-mean); }); const sdv=Math.sqrt(v/Math.max(1,n-1));
+  return { n, win:w/n, exp:mean, pf:gl>0?gp/gl:(gp>0?99:0), dd, total:tot, t:sdv>0?mean/(sdv/Math.sqrt(n)):0 };
+}
+
+/* ---------- behaviour statistics: what actually followed each state in THIS history ---------- */
+function behaviorStats(x,H){
+  const st=BEHAV.map(()=>({ n:0, sum:0, up:0 }));
+  for(let i=WARMUP;i<x.n-H;i++){
+    if(!isF(x.atr[i])||x.atr[i]<=0) continue;
+    const b=behaviorAt(x,i), r=(x.close[i+H]-x.close[i])/x.atr[i];
+    st[b].n++; st[b].sum+=r; if(r>0) st[b].up++;
+  }
+  return st.map((s,k)=>({ name:BEHAV[k], n:s.n, mean:s.n?s.sum/s.n:0, up:s.n?s.up/s.n:0.5 }));
+}
+
+/* ================================================================
+   analyzeCore — pure function: candles in, full AI read-out out
+   ================================================================ */
+function analyzeCore(C, tf, cfg){
+  cfg=cfg||DEF_CFG;
+  const x=buildCtx(C), n=x.n, H=HORIZON[tf]||12, i=n-1;
+  const ds=buildDataset(x,H), m=ds.X.length;
+  if(m<150) return { ok:false, reason:'Only '+m+' usable labelled bars — need at least 150. Pick a longer timeframe or wait for more history.', x, n };
+
+  /* chronological split with purge: train 55% | validation 20% | test 25% */
+  const a=Math.floor(m*0.55), b=Math.floor(m*0.75);
+  const iA=ds.idx[a], iB=ds.idx[b];
+  const tr=[], va=[], te=[];
+  for(let r=0;r<m;r++){
+    const bi=ds.idx[r];
+    if(bi<iA-H) tr.push(r); else if(bi>=iA && bi<iB-H) va.push(r); else if(bi>=iB) te.push(r);
+  }
+  const pick=(rows,arr)=>rows.map(r=>arr[r]);
+
+  /* --- fit on train --- */
+  const MD=trainLogit(pick(tr,ds.X),pick(tr,ds.Y));
+  let PL=trainLogit(pick(tr,ds.rule).map(v=>[v]),pick(tr,ds.Y),{l2:0.01,epochs:200});
+  if(PL.w[0]<0) PL={ w:[0], b:Math.log(PL.base/(1-PL.base)), mu:PL.mu, sd:PL.sd, base:PL.base };
+  const pM=r=>predictLogit(MD,ds.X[r]), pR=r=>predictLogit(PL,[ds.rule[r]]);
+
+  /* --- choose ensemble weights on validation --- */
+  const yV=pick(va,ds.Y), aucMv=aucOf(va.map(pM),yV), aucRv=aucOf(va.map(pR),yV);
+  const skM=Math.max(0,(isF(aucMv)?aucMv:0.5)-0.5), skR=Math.max(0,(isF(aucRv)?aucRv:0.5)-0.5);
+  const wM=(skM+skR)>1e-6?skM/(skM+skR):0.5;
+  const pE=r=>wM*pM(r)+(1-wM)*pR(r);
+  const aucEv=aucOf(va.map(pE),yV);
+  const trust=clamp(0.2+((isF(aucEv)?aucEv:0.5)-0.5)*8,0.2,1);
+
+  /* --- report on untouched test block --- */
+  const yT=pick(te,ds.Y), pT=te.map(pE);
+  const aucM=aucOf(te.map(pM),yT), aucR=aucOf(te.map(pR),yT), aucE=aucOf(pT,yT);
+  const base=yT.length?yT.reduce((s,v)=>s+v,0)/yT.length:0.5;
+  let hit=0, cnt=0;
+  pT.forEach((p,k)=>{ if(Math.abs(p-0.5)>=0.06){ cnt++; if((p>0.5)===(yT[k]===1)) hit++; } });
+  const hitRate=cnt?hit/cnt:NaN;
+  const nEff=Math.max(5,cnt/Math.max(1,H/2));
+  const zHit=isF(hitRate)?(hitRate-base)/Math.sqrt(Math.max(1e-6,base*(1-base))/nEff):0;
+
+  /* --- trade the test block (probabilities come from the train-only models) --- */
+  const probs=new Map(); te.forEach((r,k)=>probs.set(ds.idx[r],pT[k]));
+  const bt=[0.03,0.06,0.10].map(thr=>{
+    const t=runBacktest(x,probs,iB,n-1,{ thr, maxHold:H*2, costPct:cfg.costPct });
+    return Object.assign({ thr, trades:t }, tradeStats(t));
+  });
+  const main=bt[1];
+  const verified=main.n>=8 && main.exp>0.05 && main.pf>=1.1;
+
+  /* --- production models: same procedure, refit on every labelled bar --- */
+  const MF=trainLogit(ds.X,ds.Y);
+  let PF=trainLogit(ds.rule.map(v=>[v]),ds.Y,{l2:0.01,epochs:200});
+  if(PF.w[0]<0) PF={ w:[0], b:Math.log(PF.base/(1-PF.base)), mu:PF.mu, sd:PF.sd, base:PF.base };
+
+  /* --- live read on the last bar --- */
+  const f=featuresAt(x,i);
+  if(!f) return { ok:false, reason:'Not enough warm-up on the latest bar.', x, n };
+  const rg=regimeAt(x,i), rs=ruleScore(f,rg);
+  const liveM=predictLogit(MF,f), liveR=predictLogit(PF,[rs.score]);
+  const p=wM*liveM+(1-wM)*liveR;
+  const dirThr=0.06;
+  const dir=p>0.5+dirThr?1:p<0.5-dirThr?-1:0;
+  const cs=contribs(MF,f).sort((q,r)=>Math.abs(r.c)-Math.abs(q.c)).slice(0,6).map(o=>({ name:FNAME[o.j], c:o.c, val:f[o.j] }));
+  const beh=behaviorAt(x,i), bst=behaviorStats(x,H);
+
+  /* --- calibration table of the final ensemble on the test block --- */
+  const bins=[[0,0.4],[0.4,0.47],[0.47,0.53],[0.53,0.6],[0.6,1.01]];
+  const calib=bins.map(bn=>{
+    let c=0,u=0,s=0; pT.forEach((pp,k)=>{ if(pp>=bn[0]&&pp<bn[1]){ c++; s+=pp; if(yT[k]===1) u++; } });
+    return { lo:bn[0], hi:Math.min(bn[1],1), n:c, pred:c?s/c:NaN, real:c?u/c:NaN };
+  });
+
+  return {
+    ok:true, x, n, i, H, tf, t:C[i].time, price:C[i].close, atr:x.atr[i],
+    p, pM:liveM, pR:liveR, dir, dirThr, regime:rg, rule:rs, drivers:cs, beh, bst, f, wM, trust,
+    model:{ m, nTrain:tr.length, nVal:va.length, nTest:te.length, base, aucM, aucR, aucE, aucEv, hitRate, nHit:cnt, zHit, nEff, features:NF,
+            testFrom:C[iB].time, testBars:n-1-iB },
+    bt, main, verified, calib,
+    ens:{ aucMv, aucRv }
+  };
+}
+
+/* ================================================================
+   LIVE CONTEXT — derivatives, order book, higher timeframes
+   Each adjustment is bounded and shown, never hidden.
+   ================================================================ */
+function derivAdjust(d, dir, book){
+  const items=[]; let adj=0;
+  if(d){
+    if(isF(d.funding)){
+      if(d.funding>0.05){ adj-=0.015; items.push({ t:'Funding '+d.funding.toFixed(3)+'% — crowded longs', v:-0.015 }); }
+      else if(d.funding<-0.03){ adj+=0.015; items.push({ t:'Funding '+d.funding.toFixed(3)+'% — crowded shorts', v:0.015 }); }
+    }
+    if(isF(d.ls)){
+      if(d.ls>2.2){ adj-=0.01; items.push({ t:'Retail long/short '+d.ls.toFixed(2)+' — long-heavy', v:-0.01 }); }
+      else if(d.ls<0.8){ adj+=0.01; items.push({ t:'Retail long/short '+d.ls.toFixed(2)+' — short-heavy', v:0.01 }); }
+    }
+    if(isF(d.taker)){
+      if(d.taker>1.12){ adj+=0.012; items.push({ t:'Taker buy/sell '+d.taker.toFixed(2)+' — aggressive buying', v:0.012 }); }
+      else if(d.taker<0.89){ adj-=0.012; items.push({ t:'Taker buy/sell '+d.taker.toFixed(2)+' — aggressive selling', v:-0.012 }); }
+    }
+    if(isF(d.oiChg) && Math.abs(d.oiChg)>3 && dir!==0){
+      const v=0.01*dir; adj+=v; items.push({ t:'Open interest '+fmtPct(d.oiChg)+' with trend — positions building', v });
+    }
+  }
+  if(book && isF(book.imb)){
+    if(book.imb>0.22){ adj+=0.01; items.push({ t:'Order book bid-heavy ('+(book.imb*100).toFixed(0)+'%)', v:0.01 }); }
+    else if(book.imb<-0.22){ adj-=0.01; items.push({ t:'Order book ask-heavy ('+(book.imb*100).toFixed(0)+'%)', v:-0.01 }); }
+  }
+  return { adj:clamp(adj,-0.05,0.05), items };
+}
+function bookStats(depth, price){
+  if(!depth) return null;
+  const rng=price*0.01;
+  let bid=0, ask=0;
+  depth.bids.forEach(b=>{ if(b.p>=price-rng) bid+=b.p*b.q; });
+  depth.asks.forEach(a=>{ if(a.p<=price+rng) ask+=a.p*a.q; });
+  const tot=bid+ask;
+  const bigB=[...depth.bids].sort((q,r)=>r.p*r.q-q.p*q.q).slice(0,3), bigA=[...depth.asks].sort((q,r)=>r.p*r.q-q.p*q.q).slice(0,3);
+  return { bid, ask, imb:tot?(bid-ask)/tot:0, bigB, bigA };
+}
+async function htfBias(sym, tf){
+  const ladder=HTF_LADDER[tf]||[]; const items=[];
+  for(const t of ladder){
+    const k=await fetchKlines(sym,t,320,60000);
+    if(k.length<WARMUP+30){ continue; }
+    const kc=k.slice(0,-1), x=buildCtx(kc), i=kc.length-1, f=featuresAt(x,i);
+    if(!f) continue;
+    const rs=ruleScore(f,regimeAt(x,i));
+    const s=clamp(0.6*rs.comps.trend+0.4*rs.comps.struct,-1,1);
+    items.push({ tf:t, score:s, label:s>0.18?'BULL':s<-0.18?'BEAR':'FLAT', trend:x.smc.trend[i] });
+  }
+  const score=items.length?items.reduce((s,o)=>s+o.score,0)/items.length:0;
+  return { items, score, label:score>0.15?'BULL':score<-0.15?'BEAR':'FLAT' };
+}
+
+/* ================================================================
+   GRADE + TRADE PLAN
+   ================================================================ */
+function gradeAI(ai){
+  const pts=[]; let tot=0;
+  const add=(name,v,max)=>{ v=clamp(v,0,max); tot+=v; pts.push({ name, v, max }); };
+  const conv=Math.abs(ai.pAdj-0.5);
+  add('Probability conviction', conv/0.15*30, 30);
+  const agree=(ai.pM-0.5)*(ai.pR-0.5)>0 && Math.sign(ai.pM-0.5)===Math.sign(ai.pAdj-0.5);
+  add('Model & rule engine agree', agree?15:(Math.abs(ai.pM-0.5)<0.03||Math.abs(ai.pR-0.5)<0.03?6:0), 15);
+  let htf=7; if(ai.htf && ai.htf.items.length){ htf=ai.dir===0?7:(sign(ai.htf.score)===ai.dir?20*clamp(0.5+Math.abs(ai.htf.score),0,1):(Math.abs(ai.htf.score)<0.15?8:0)); }
+  add('Higher-timeframe alignment', htf, 20);
+  add('Backtest edge (test block)', ai.verified?clamp(ai.main.exp/0.25,0.3,1)*20:(ai.main.n>=8&&ai.main.exp>0?6:0), 20);
+  const rgFit=ai.regime.name==='Volatile'?2:(ai.regime.name==='Squeeze'?5:(ai.regime.name==='Range'?6:10));
+  add('Regime suitability', rgFit, 10);
+  const conf=(ai.live?ai.live.items.filter(o=>o.v*ai.dir>0).length:0);
+  add('Flow / derivatives confirm', conf*2.5, 5);
+  let sc=tot*(0.55+0.45*ai.trust);
+  if(!ai.verified) sc=Math.min(sc,58);
+  if(ai.regime.name==='Volatile') sc=Math.min(sc,70);
+  const g=sc>=75?'A':sc>=62?'B':sc>=48?'C':'D';
+  return { score:Math.round(sc), grade:g, parts:pts };
+}
+function makePlan(ai, price){
+  if(!ai.ok||ai.dir===0) return null;
+  const x=ai.x, i=ai.i, a=ai.atr, d=ai.dir;
+  let ext = d===1 ? rollMin(x.low,i,12)-0.15*a : rollMax(x.high,i,12)+0.15*a;
+  let risk=Math.abs(price-ext);
+  risk=clamp(risk,1.0*a,2.8*a);
+  const stop=price-d*risk;
+  const tps=[1.5,2.5,4].map(r=>({ r, price:price+d*risk*r }));
+  const eq=S.cfg.equity, rp=S.cfg.riskPct;
+  const riskUSD=eq*rp/100, units=riskUSD/risk, notional=units*price;
+  let liqT=null;
+  if(S.liqZones){
+    const cand=S.liqZones.filter(z=> d===1 ? (z.type==='BSL' && z.price>price) : (z.type==='SSL' && z.price<price)).sort((q,r)=>Math.abs(q.price-price)-Math.abs(r.price-price))[0];
+    if(cand) liqT=cand;
+  }
+  return { dir:d, entry:price, stop, risk, riskPct:risk/price*100, tps, units, notional, riskUSD, lev:notional/eq, liqT,
+    invalid:'Close '+(d===1?'below ':'above ')+fmt(stop)+' invalidates the setup' };
+}
+
+/* ================================================================
+   LEDGER — live signals graded by what actually happened
+   ================================================================ */
+function ledgerAll(){ return LS.get('ledger',[]); }
+function ledgerSave(a){ LS.set('ledger',a.slice(-250)); }
+function ledgerAdd(ai){
+  if(!ai||!ai.ok||ai.dir===0||!ai.verified||!ai.plan) return;
+  if(ai.grade.grade!=='A' && ai.grade.grade!=='B') return;
+  const L=ledgerAll();
+  if(L.some(o=>o.sym===ai.sym && o.tf===ai.tf && o.status==='open')) return;
+  L.push({ id:ai.sym+ai.tf+ai.t, sym:ai.sym, tf:ai.tf, t:ai.t, dir:ai.dir, entry:ai.plan.entry, stop:ai.plan.stop, tp:ai.plan.tps[0].price,
+    grade:ai.grade.grade, p:+ai.pAdj.toFixed(3), status:'open', r:0 });
+  ledgerSave(L);
+}
+function ledgerResolve(sym,tf,C){
+  const L=ledgerAll(); let ch=false;
+  L.forEach(o=>{
+    if(o.status!=='open'||o.sym!==sym||o.tf!==tf) return;
+    const risk=Math.abs(o.entry-o.stop)||1e-9, hold=(HORIZON[tf]||12)*3;
+    let cnt=0;
+    for(const c of C){
+      if(c.time<=o.t) continue; cnt++;
+      const hs=o.dir===1?c.low<=o.stop:c.high>=o.stop, ht=o.dir===1?c.high>=o.tp:c.low<=o.tp;
+      if(hs){ o.status='loss'; o.r=-1; ch=true; break; }
+      if(ht){ o.status='win'; o.r=Math.abs(o.tp-o.entry)/risk; ch=true; break; }
+      if(cnt>=hold){ o.status='exp'; o.r=o.dir*(c.close-o.entry)/risk; ch=true; break; }
+    }
+  });
+  if(ch) ledgerSave(L);
+  return L;
+}
+function ledgerStats(){
+  const L=ledgerAll(), done=L.filter(o=>o.status!=='open');
+  const wins=done.filter(o=>o.r>0).length, tot=done.reduce((s,o)=>s+o.r,0);
+  return { all:L.length, open:L.length-done.length, done:done.length, wins, win:done.length?wins/done.length:NaN, exp:done.length?tot/done.length:NaN, total:tot };
+}
+
 </body>
 </html>
